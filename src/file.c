@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
 #include <time.h>
 
 #include "file.h"
@@ -20,3 +21,7 @@ bool make(char *nom,long slowns, int taille){
     return false;
 }
 
+int has_extension(const char *filename, const char *ext) {
+    size_t nl = strlen(filename), el = strlen(ext);
+    return nl >= el && strcmp(filename + nl - el, ext) == 0;
+}

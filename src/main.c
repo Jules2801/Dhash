@@ -31,6 +31,16 @@ int main(int argc,char **argv){
             fprintf(stderr, "il faut 4 paramètres");
             return 1;
         }
+        bool is_cks = has_extension(argv[2], ".cks");
+        bool is_sha = has_extension(argv[2], ".sha");
+
+        //printf("%B,%B\n",is_cks,is_sha);
+
+        if (!is_cks && !is_sha) {
+            fprintf(stderr, "il faut un fichier en *.cks ou *.sha");
+            return 1;
+        }
+
         long slowns = atol(argv[3]);
         int taille = atoi(argv[4]);
         int fd = open(argv[2], O_RDWR| O_CREAT,0644);

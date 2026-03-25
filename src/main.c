@@ -7,8 +7,9 @@
 #include <sys/types.h>
 #include <time.h>
 
-#include "file.h"
+#include "command.h"
 #include "hash.h"
+#include "file.h"
 
 
 int main(int argc,char **argv){
@@ -18,10 +19,8 @@ int main(int argc,char **argv){
     }
     unsigned char test[] = {"mklkvbmkslckmlqakjkjklmlmlmmlmmlmlmmaad"};
     
-    sha1(test, sizeof(test)-1, 1);
-    uint32_t check = checksum32(test, sizeof(test)-1, 1024*16);
-    printf("%08x\n",check);
-    //printf("%d\n",check);
+    sha1(test, sizeof(test)-1, 1024);
+    checksum32(test, sizeof(test)-1, 1024);
     //printf("%d\n",argc);
     // for (int i = 0; i<argc ; i++) {
     //     printf("%s\n",argv[i]);

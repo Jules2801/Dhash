@@ -3,8 +3,9 @@
 
 #include "stdbool.h"
 #include <openssl/sha.h>
+#include <stdint.h>
 
 uint32_t checksum32(unsigned char *data, int taille, int b);
-unsigned char * sha1(unsigned char *data,int taille, int b);
+uint32_t sha1(unsigned char *data,int taille, uint32_t b);
 
 #endif

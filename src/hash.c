@@ -14,20 +14,18 @@ uint32_t checksum32(unsigned char *data, int taille, int b){
     return sum;
 }
 
-unsigned char *sha1(unsigned char *data, int taille, int b){
-    unsigned char *res = malloc(SHA_DIGEST_LENGTH);
-    if(res == NULL){
-        fprintf(stderr, "sha1 malloc error");
-        return NULL;
-    }
-    if (!SHA1(data, taille, res)) {
+uint32_t sha1(unsigned char *data, int taille, uint32_t b){
+    unsigned char hash[SHA_DIGEST_LENGTH];
+    if (!SHA1(data, taille, hash)) {
         fprintf(stderr, "sha1 error");
-        return NULL;
+        return 0;
     }
     
-    for(int i = 0; i < SHA_DIGEST_LENGTH; i++){
-        printf("%02x", res[i]);
-    }
+    // for(int i = 0; i < SHA_DIGEST_LENGTH; i++){
+    //     printf("%02x", hash[i]);
+    // }
     printf("\n");
-    return res;
+    uint32_t dernier = *(uint32_t *)&hash[16];
+    //printf("val sha : %08x\n",dernier%b);
+    return dernier%b;
 }

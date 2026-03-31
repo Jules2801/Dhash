@@ -17,10 +17,7 @@ int main(int argc,char **argv){
         fprintf(stderr, "il faut une commande");
         return 1;
     }
-    unsigned char test[] = {"mklkvbmkslckmlqakjkjklmlmlmmlmmlmlmmaad"};
     
-    sha1(test, sizeof(test)-1, 1024);
-    checksum32(test, sizeof(test)-1, 1024);
     //printf("%d\n",argc);
     // for (int i = 0; i<argc ; i++) {
     //     printf("%s\n",argv[i]);

@@ -53,7 +53,7 @@ int main(int argc,char **argv){
         printf("nom du fichier : %s\n",argv[2]);
         printf("taille du fichier : %ld\n",sb.st_size);
         printf("dernière modif du fichier : %s\n",ctime(&sb.st_mtime));
-        return make(argv[2], slowns, taille);
+        return make(argv[2], slowns, taille,fd);
     }
     if (strcmp(argv[1], "free") == 0) {
         printf("free\n");

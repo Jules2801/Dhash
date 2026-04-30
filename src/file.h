@@ -4,6 +4,6 @@
 #include "stdbool.h"
 
 bool has_extension(const char *filename, const char *ext);
-bool sleep(long slowns);
+bool sleep_nano(long slowns);
 
 #endif

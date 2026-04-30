@@ -12,7 +12,7 @@ bool has_extension(const char *filename, const char *ext) {
     strcmp(filename + filenameLength - extLength, ext) == 0;
 }
 
-bool sleep(long slowns){
+bool sleep_nano(long slowns){
     struct timespec time;
     time.tv_sec  = slowns / 1000000000L;
     time.tv_nsec = slowns % 1000000000L;

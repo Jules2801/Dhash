@@ -24,7 +24,7 @@ int main(int argc,char **argv){
     // }
     if (strcmp(argv[1], "make") == 0) {
         if (argc != 5) {
-            fprintf(stderr, "il faut 4 paramètres");
+            fprintf(stderr, "il faut 4 paramètres\n");
             return 1;
         }
         bool is_cks = has_extension(argv[2], ".cks");
@@ -33,7 +33,7 @@ int main(int argc,char **argv){
         //printf("%B,%B\n",is_cks,is_sha);
 
         if (!is_cks && !is_sha) {
-            fprintf(stderr, "il faut un fichier en *.cks ou *.sha");
+            fprintf(stderr, "il faut un fichier en *.cks ou *.sha\n");
             return 1;
         }
 

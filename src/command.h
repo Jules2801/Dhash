@@ -6,5 +6,6 @@
 // commande make 
 bool make(char *nom, long slowns, int taille,int fd);
 bool free_file(char *nom,int slowns);
+bool insertstring(long slowns,char *data,int fd);
 
 #endif

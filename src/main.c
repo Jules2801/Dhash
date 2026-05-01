@@ -51,7 +51,7 @@ int main(int argc,char **argv){
             return 1;
         }
         printf("nom du fichier : %s\n",argv[2]);
-        printf("taille du fichier : %ld\n",sb.st_size);
+        printf("taille du fichier : %lld\n",sb.st_size);
         printf("dernière modif du fichier : %s\n",ctime(&sb.st_mtime));
         return make(argv[2], slowns, taille,fd);
     }

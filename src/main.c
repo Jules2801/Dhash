@@ -7,9 +7,10 @@
 #include <sys/types.h>
 #include <time.h>
 
-#include "command.h"
-#include "hash.h"
-#include "file.h"
+
+#include "../include/handlers.h"
+#include "../include/hash.h"
+#include "../include/file.h"
 
 
 int main(int argc,char **argv){
@@ -18,45 +19,42 @@ int main(int argc,char **argv){
         return 1;
     }
     
-    //printf("%d\n",argc);
-    // for (int i = 0; i<argc ; i++) {
-    //     printf("%s\n",argv[i]);
-    // }
     if (strcmp(argv[1], "make") == 0) {
-        if (argc != 5) {
-            fprintf(stderr, "il faut 4 paramètres\n");
-            return 1;
-        }
-        bool is_cks = has_extension(argv[2], ".cks");
-        bool is_sha = has_extension(argv[2], ".sha");
-
-        //printf("%B,%B\n",is_cks,is_sha);
-
-        if (!is_cks && !is_sha) {
-            fprintf(stderr, "il faut un fichier en *.cks ou *.sha\n");
-            return 1;
-        }
-
-        long slowns = atol(argv[3]);
-        int taille = atoi(argv[4]);
-        int fd = open(argv[2], O_RDWR| O_CREAT,0644);
-        if (fd == -1) {
-            perror("open");
-            return 1;
-        }
-        struct stat sb;
-        int res = fstat(fd, &sb);
-        if (res == -1) {
-            perror("fstat");
-            return 1;
-        }
-        printf("nom du fichier : %s\n",argv[2]);
-        printf("taille du fichier : %lld\n",sb.st_size);
-        printf("dernière modif du fichier : %s\n",ctime(&sb.st_mtime));
-        return make(argv[2], slowns, taille,fd);
+        handle_make(argc-2, argv+2);
     }
     if (strcmp(argv[1], "free") == 0) {
         printf("free\n");
     }
+    if (strcmp(argv[1], "insertstring") == 0) {
+        handle_insertstring(argc-2, argv+2);
+        
+    }
+    if (strcmp(argv[1], "insertfile") == 0) {
+        printf("free\n");
+    }
+    if (strcmp(argv[1], "lookup") == 0) {
+        printf("free\n");
+    }
+    if (strcmp(argv[1], "deletehash") == 0) {
+        printf("free\n");
+    }
+    if (strcmp(argv[1], "delete") == 0) {
+        printf("free\n");
+    }
+    if (strcmp(argv[1], "check") == 0) {
+        printf("free\n");
+    }
+    if (strcmp(argv[1], "extend") == 0) {
+        printf("free\n");
+    }    
+    if (strcmp(argv[1], "shrink") == 0) {
+        printf("free\n");
+    }    
+    if (strcmp(argv[1], "ajust") == 0) {
+        printf("free\n");
+    }  
+
+
+   
 
 }

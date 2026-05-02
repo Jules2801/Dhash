@@ -2,8 +2,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
-
-#include "file.h"
+#include "../include/file.h"
 
 bool has_extension(const char *filename, const char *ext) {
     size_t filenameLength = strlen(filename);
@@ -11,6 +10,7 @@ bool has_extension(const char *filename, const char *ext) {
     return filenameLength >= extLength &&
     strcmp(filename + filenameLength - extLength, ext) == 0;
 }
+
 
 bool sleep_nano(long slowns){
     struct timespec time;

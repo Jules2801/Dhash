@@ -7,7 +7,7 @@
 #include <sys/_types/_u_int32_t.h>
 #include <openssl/sha.h>
 
-#include "hash.h"
+#include "../include/hash.h"
 
 uint32_t checksum32(unsigned char *data, int size, int b){
     

@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -14,21 +15,26 @@
 
 
 int print_file_stats(int fd, const char *filename,struct stat* sb) {
-    
-    if (fstat(fd, sb) == -1) {
+    struct stat local_sb;
+
+    if (fstat(fd, &local_sb) == -1) {
         perror("fstat");
         return -1;
     }
     
     printf("nom du fichier : %s\n", filename);
-    printf("taille du fichier : %lld octets\n", (long long)sb->st_size);
-    printf("dernière modif du fichier : %s", ctime(&sb->st_mtime));
+    printf("taille du fichier : %lld octets\n", (long long)local_sb.st_size);
+    printf("dernière modif du fichier : %s", ctime(&local_sb.st_mtime));
     
+    if (sb != NULL) {
+        *sb = local_sb; 
+    }
+
     return 0;
 }
 
 
-int check_extension(char* filename,type_hachage_t* type_hash){
+int check_extension(char* filename){
 
     bool is_cks = has_extension(filename , ".cks");
     bool is_sha = has_extension(filename , ".sha");
@@ -39,11 +45,11 @@ int check_extension(char* filename,type_hachage_t* type_hash){
         return 1;
     }
     if(is_cks){
-        *type_hash = HASH_CKS;
+        return HASH_CKS;
     }else{
-        *type_hash = HASH_SHA1;
+        return HASH_SHA1;
     }
-    return 0;
+    return -1;
 }
 
 
@@ -55,9 +61,7 @@ int handle_make(int argc, char **argv){
         return 1;
     }
 
-    type_hachage_t t_hash;
-
-    if(check_extension(argv[0],&t_hash)){
+    if(check_extension(argv[0])==-1){
         return 1;
     }
     
@@ -68,8 +72,7 @@ int handle_make(int argc, char **argv){
         perror("open");
         return 1;
     }
-    struct stat sb;
-    print_file_stats(fd, argv[0],&sb);
+    print_file_stats(fd, argv[0],NULL);
     if(make(slowns, taille,fd)){
         perror("Échec de la commande make");
         return 1;
@@ -86,8 +89,8 @@ int handle_insertstring(int argc, char **argv){
         fprintf(stderr, "il faut 3 paramètres\n");
         return 1;
     }
-    type_hachage_t t_hash;
-    if(check_extension(argv[0],&t_hash)){
+    type_hash_t t_hash;
+    if((t_hash = check_extension(argv[0]))==-1){
         return 1;
     }
 
@@ -111,6 +114,45 @@ int handle_insertstring(int argc, char **argv){
         printf("insertstring [ slowns : %ld, string : %s ]\n",slowns,data); 
         return 0;
     }
+
+
+}
+
+int handle_free(int argc,char** argv){
+    if(argc!=2){
+        fprintf(stderr, "il faut 2 paramètres\n");
+        return 1;
+    }
+    
+    if(check_extension(argv[0])==-1){
+        return 1;
+    }
+
+    long slowns = atol(argv[1]);
+    int fd = open(argv[0], O_RDONLY,0644);
+    if (fd == -1) {
+        perror("open");
+        return 1;
+    }
+
+    struct stat sb;
+    print_file_stats(fd, argv[0],&sb);
+    int fblocks;
+    size_t size = sb.st_size;
+
+    if((fblocks = free_blocks(slowns,fd,size))==-1){
+        fprintf(stderr, "Erreur de la commande free\n");
+        return 1;
+    }
+
+    size_t blocks = size/1024;
+    double filling_rate  = ((double)(blocks - fblocks) / (double)blocks) * 100.0;
+
+    printf("%d bloque(s) libre(s) sur %zu bloque(s)\n",fblocks,blocks);
+    printf("Taux de remplissage : %.2f%%\n",filling_rate);
+
+    return 0;
+
 
 
 }

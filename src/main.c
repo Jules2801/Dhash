@@ -23,7 +23,7 @@ int main(int argc,char **argv){
         handle_make(argc-2, argv+2);
     }
     if (strcmp(argv[1], "free") == 0) {
-        printf("free\n");
+        handle_free(argc-2,argv+2);
     }
     if (strcmp(argv[1], "insertstring") == 0) {
         handle_insertstring(argc-2, argv+2);

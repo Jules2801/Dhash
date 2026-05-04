@@ -1,15 +1,11 @@
 #ifndef COMMAND_H
 #define COMMAND_H
 
+#include "hash.h"
 #include <stdint.h>
 #include <stdio.h>
 
 
-//type pour les differents hash existant (pour l'instant les 2 initiaux)
-typedef enum {
-    HASH_SHA1,
-    HASH_CKS
-} type_hachage_t;
 
 /**
  * @brief Initialise une nouvelle table de hachage vide.
@@ -21,10 +17,10 @@ typedef enum {
 int make(long slowns, uint32_t size_block,int fd);
 
 
-int free_file(char *nom,int slowns);
+int free_blocks(long slowns,int fd,size_t size);
 
 
-int insertstring(long slowns,char *data,int fd,int hash,size_t size);
+int insertstring(long slowns,char *data,int fd,type_hash_t hash,size_t size);
 
 #endif
 
@@ -49,7 +45,7 @@ int insertstring(long slowns,char *data,int fd,int hash,size_t size);
  * @param type Le type de fonction de hachage à utiliser (SHA1 ou CKS).
  * @return 0 si succès, -1 si erreur système, 1 si doublon.
  */
-int cmd_insertstring(int fd, const char *data, type_hachage_t type);
+int cmd_insertstring(int fd, const char *data);
 
 // (Les futures commandes viendront ici : cmd_insertfile, cmd_lookup, etc.)
 

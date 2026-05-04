@@ -9,7 +9,7 @@
 
 #include "../include/hash.h"
 
-uint32_t checksum32(unsigned char *data, int size, int b){
+uint32_t checksum32(unsigned char *data, int size, uint32_t b){
     
     //on cast la data en uint_32 pour lire 4 octets par 4 octets
     uint32_t* data32 = (uint32_t*) data;
@@ -46,7 +46,22 @@ uint32_t sha1(unsigned char *data, int taille, uint32_t b){
     //     printf("%02x", hash[i]);
     // }
     printf("\n");
-    uint32_t dernier = *(uint32_t *)&hash[16];
-    //printf("val sha : %08x\n",dernier%b);
-    return dernier%b;
+    uint32_t dernier;
+    memcpy(&dernier, &hash[16], sizeof(uint32_t));
+    return dernier % b;
 }
+
+
+uint32_t apply_hash(unsigned char *data,type_hash_t hash,uint32_t b){
+    size_t data_size = strlen((char *)data);
+    if(hash==HASH_CKS){
+        return checksum32(data, data_size, b);
+    }else{
+        if(hash==HASH_SHA1){
+            return sha1(data, data_size, b);
+        }
+        else{
+            return -1;
+        }
+    }
+} 

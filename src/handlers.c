@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -42,7 +43,7 @@ int check_extension(char* filename){
 
     if (!is_cks && !is_sha) {
         fprintf(stderr, "il faut un fichier en *.cks ou *.sha\n");
-        return 1;
+        return -1;
     }
     if(is_cks){
         return HASH_CKS;
@@ -90,7 +91,7 @@ int handle_insertstring(int argc, char **argv){
         return 1;
     }
     type_hash_t t_hash;
-    if((t_hash = check_extension(argv[0]))==-1){
+    if((t_hash = check_extension(argv[0]))==UINT32_MAX){
         return 1;
     }
 
@@ -103,7 +104,7 @@ int handle_insertstring(int argc, char **argv){
     
     char* data = argv[2];
 
-    struct stat sb;
+    struct stat sb = {0};
     print_file_stats(fd, argv[0],&sb);
     
     if(insertstring(slowns, data, fd, t_hash,sb.st_size)){
@@ -135,7 +136,7 @@ int handle_free(int argc,char** argv){
         return 1;
     }
 
-    struct stat sb;
+    struct stat sb = {0};
     print_file_stats(fd, argv[0],&sb);
     int fblocks;
     size_t size = sb.st_size;
@@ -155,4 +156,42 @@ int handle_free(int argc,char** argv){
 
 
 
+}
+
+#define perror_line(msg) \
+    fprintf(stderr, "%s:%d %s: %s\n", __FILE__, __LINE__, msg, strerror(errno))
+
+int handle_lookup(int argc, char **argv) {
+    if (argc != 3) {
+        fprintf(stderr, "il faut 3 paramètres\n");
+        return 1;
+    }
+
+    type_hash_t t_hash = check_extension(argv[0]);
+    if (t_hash == UINT32_MAX) {
+        return 1;
+    }
+
+    long slowns = atol(argv[1]);
+    int fd = open(argv[0], O_RDONLY, 0644);
+    if (fd == -1) {
+        perror_line("open");
+        return 1;
+    }
+
+    struct stat sb = {0};
+    print_file_stats(fd, argv[0], &sb);
+
+    int res = lookup(slowns, argv[2], fd, t_hash, sb.st_size);
+    if (res == 0) {
+        printf("lookup : trouvé\n");
+        return 0;
+    }
+    if (res == 1) {
+        printf("lookup : non trouvé\n");
+        return 1;
+    }
+
+    fprintf(stderr, "Erreur de la commande lookup\n");
+    return 1;
 }

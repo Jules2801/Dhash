@@ -1,7 +1,7 @@
 #ifndef FILE_H
 #define FILE_H
 
-#include "stdbool.h"
+#include <stdbool.h>
 
 bool has_extension(const char *filename, const char *ext);
 bool sleep_nano(long slowns);

@@ -3,8 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include <sys/_endian.h>
-#include <sys/_types/_u_int32_t.h>
+#include <arpa/inet.h>
 #include <openssl/sha.h>
 
 #include "../include/hash.h"

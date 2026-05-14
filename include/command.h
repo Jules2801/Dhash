@@ -2,8 +2,8 @@
 #define COMMAND_H
 
 #include "hash.h"
+#include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 
 
 
@@ -21,6 +21,8 @@ int free_blocks(long slowns,int fd,size_t size);
 
 
 int insertstring(long slowns,char *data,int fd,type_hash_t hash,size_t size);
+
+int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size);
 
 #endif
 

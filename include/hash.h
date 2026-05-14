@@ -1,7 +1,7 @@
 #ifndef HASH
 #define HASH
 
-#include "stdbool.h"
+#include <stdbool.h>
 #include <stdint.h>
 
 //type pour les differents hash existant (pour l'instant les 2 initiaux)

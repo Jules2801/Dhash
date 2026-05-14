@@ -15,7 +15,7 @@
 
 int main(int argc,char **argv){
     if (argc == 1) {
-        fprintf(stderr, "il faut une commande");
+        fprintf(stderr, "il faut une commande\n");
         return 1;
     }
     
@@ -33,7 +33,7 @@ int main(int argc,char **argv){
         printf("free\n");
     }
     if (strcmp(argv[1], "lookup") == 0) {
-        printf("free\n");
+        handle_lookup(argc-2, argv+2);
     }
     if (strcmp(argv[1], "deletehash") == 0) {
         printf("free\n");

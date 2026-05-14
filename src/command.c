@@ -53,7 +53,7 @@ int make(long slowns, uint32_t taille,int fd) {
         perror("mmap");
         return 1;
     }
-    for (int i = 0; i < taille; i++) {
+    for (uint32_t i = 0; i < taille; i++) {
         addr[i].longueur = 0xffffffffUL;  
         addr[i].premier = i;
         //apriori pas necessaire mais faisons le par securité
@@ -81,7 +81,7 @@ int insertstring(long slowns, char *data, int fd, type_hash_t hash, size_t size)
 
     //Calcul du hash
     uint32_t index;
-    if((index = apply_hash((unsigned char*)data, hash, b))==-1){
+    if((index = apply_hash((unsigned char*)data, hash, b)) == UINT32_MAX){
         fprintf(stderr, "Erreur : La fonction de hachage n'existe pas.\n");
         munmap(addr,size);
         return 1;
@@ -173,6 +173,51 @@ int free_blocks(long slowns, int fd, size_t size) {
 
     munmap(addr, size);
     return free_count; 
+}
+
+int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
+    if (sleep_nano(slowns)) {
+        return -1;
+    }
+
+    if (size < 1024) {
+        fprintf(stderr, "Erreur lookup: taille de table invalide\n");
+        return -1;
+    }
+
+    size_t b = size / 1024;
+
+    struct hache_entree *addr = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+    if (addr == MAP_FAILED) {
+        perror("mmap");
+        return -1;
+    }
+
+    uint32_t index = apply_hash((unsigned char *)data, hash, b);
+    if (index == UINT32_MAX) {
+        fprintf(stderr, "Erreur lookup : fonction de hachage non trouvé\n");
+        munmap(addr, size);
+        return -1;
+    }
+
+    int found = 0;
+    for (size_t i = 0; i < b; i++) {
+        uint32_t test_block = (index + i) % b;
+
+        if (addr[test_block].longueur == 0xffffffffUL) {
+            break;
+        }
+        if (addr[test_block].premier != index) {
+            continue;
+        }
+        if (is_same_string(addr, test_block, data)) {
+            found = 1;
+            break;
+        }
+    }
+
+    munmap(addr, size);
+    return found ? 0 : 1;
 }
 
 

@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <sys/fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <string.h>
@@ -69,15 +71,29 @@ int is_same_string(int fd, struct hache_entree *addr, uint32_t start_block,
 
 
 int make(long slowns, uint32_t taille,int fd) {
-    if (sleep_nano(slowns)) {
+  
+    if (ftruncate(fd, taille * 1024) == -1) {
+    perror("ftruncate");
+    return 1;
+    }
+
+    struct flock fl = {0};
+    fl.l_type = F_WRLCK;
+    fl.l_whence = SEEK_SET;
+    fl.l_start = 0;
+    fl.l_len = 0;
+
+    if (fcntl(fd, F_SETLKW, &fl) == -1) {
+        perror("fcntl lock dans make");
         return 1;
     }
-    ftruncate(fd, taille*1024);
 
     struct hache_entree * addr = mmap(NULL, taille*1024, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
     if (addr == MAP_FAILED) {
         perror("mmap");
+        fl.l_type = F_UNLCK;
+        fcntl(fd, F_SETLKW, &fl);
         return 1;
     }
     for (uint32_t i = 0; i < taille; i++) {
@@ -86,34 +102,66 @@ int make(long slowns, uint32_t taille,int fd) {
         //apriori pas necessaire mais faisons le par securité
         addr[i].suivant = 0xffffffffUL;
     }
+    sleep_nano(slowns);
     munmap(addr, taille*1024);
+
+    fl.l_type = F_UNLCK;
+    fcntl(fd, F_SETLKW, &fl);
+
+    
     
     return 0;
 }
 
-
-int free_blocks(long slowns, int fd, size_t size) {
-
-    if (sleep_nano(slowns)) {
-        return -1; 
-    }
-
+int free_blocks(long slowns, int fd, size_t size,size_t *free_count, size_t *object_count) {
     size_t b = size / 1024;
-    
+
     struct hache_entree *addr = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
     if (addr == MAP_FAILED) {
-        perror("mmap dans free");
+        perror("mmap dans free_blocks");
         return -1;
     }
-    int free_count = 0;
-    for (size_t i = 0; i < b; i++) {
-        if (addr[i].longueur == 0xffffffffUL) {
-            free_count++;
-        }
+
+    bool *is_continuation = calloc(b, sizeof(bool));
+    if (is_continuation == NULL) {
+        perror("calloc dans free_blocks");
+        munmap(addr, size);
+        return -1;
     }
 
+    size_t free_c = 0;
+
+    // compte les libres + marque les continuations
+    for (size_t i = 0; i < b; i++) {
+        lock_read_block(fd, i);
+
+        if (addr[i].longueur == 0xffffffffUL) {
+            free_c++;
+        } else if (addr[i].longueur > 1012 && addr[i].suivant != 0xffffffffUL) {
+            is_continuation[addr[i].suivant] = true;
+        }
+        sleep_nano(slowns);
+        unlock_block(fd, i);
+    }
+    // compte les objets
+    size_t object_c = 0;
+    for (size_t i = 0; i < b; i++) {
+        lock_read_block(fd, i);
+
+        if (addr[i].longueur != 0xffffffffUL && !is_continuation[i]) {
+            object_c++;
+        }
+
+        sleep_nano(slowns);
+        unlock_block(fd, i);
+    }
+
+    free(is_continuation);
     munmap(addr, size);
-    return free_count; 
+
+    *free_count = free_c;
+    *object_count = object_c;
+    return 0;
 }
 
 

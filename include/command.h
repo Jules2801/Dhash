@@ -25,7 +25,7 @@ int is_same_string(int fd, struct hache_entree *addr, uint32_t start_block, cons
 int make(long slowns, uint32_t size_block,int fd);
 
 
-int free_blocks(long slowns,int fd,size_t size);
+int free_blocks(long slowns, int fd, size_t size,size_t *free_count, size_t *object_count) ;
 
 
 int insertstring(long slowns,char *data,int fd,type_hash_t hash,size_t size);

@@ -23,10 +23,15 @@ uint32_t checksum32(unsigned char *data, int size, uint32_t b){
     }
     if(rest>0){
         uint32_t tmp = 0;
-      
+        
+        
         memcpy(&tmp,&data[size-rest],rest);
+
+        //pour test l'histoire de 24 et 1 
+        //printf("AVANT ntohl : 0x%08x\n", tmp);
     
-        uint32_t letmp = ntohl(tmp);
+        uint32_t letmp = htonl(tmp);
+        //printf("APRES ntohl : 0x%08x\n", letmp);
         sum += letmp;
     }
     sum = sum % b;

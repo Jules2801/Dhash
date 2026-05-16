@@ -10,6 +10,7 @@
 #include "../include/hash.h"
 #include "../include/command.h"
 #include "../include/file.h"
+#include "../include/lock.h"
 #include "../include/type.h"
 #include "../include/utils.h"
 

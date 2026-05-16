@@ -4,8 +4,16 @@
 #include "hash.h"
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
+#include "type.h"
 
 
+/**
+ * @brief Vérifie si l'objet stocké à partir de start_block correspond à data.
+ * !!! start_block doit etre lock en ecriture ou lecture !!! 
+ * @return 1 si l'objet == data, 0 sinon.
+ */
+int is_same_string(int fd, struct hache_entree *addr, uint32_t start_block, const char *data, long slowns);
 
 /**
  * @brief Initialise une nouvelle table de hachage vide.
@@ -23,6 +31,8 @@ int free_blocks(long slowns,int fd,size_t size);
 int insertstring(long slowns,char *data,int fd,type_hash_t hash,size_t size);
 
 int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size);
+
+
 
 #endif
 

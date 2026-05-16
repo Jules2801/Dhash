@@ -13,6 +13,7 @@
 #include "../include/hash.h"
 #include "../include/command.h"
 #include "../include/file.h"
+#include "../include/insert_cmd.h"
 
 
 int print_file_stats(int fd, const char *filename,struct stat* sb) {

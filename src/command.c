@@ -23,11 +23,10 @@
  * @return 1 si l'objet == data, 0 sinon.
  */
 int is_same_string(int fd, struct hache_entree *addr, uint32_t start_block, 
-                   const char *data, long slowns) 
+                   const char *data, long slowns,size_t data_len) 
 {
     uint32_t current = start_block;
     size_t cursor = 0;
-    size_t data_len = strlen(data);
     bool first = true;  // pour ne pas unlock pas le premier 
 
     while (1) {
@@ -186,7 +185,7 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
         return -1;
     }
 
-    uint32_t index = apply_hash((unsigned char *)data, hash, b);
+    uint32_t index = apply_hash((unsigned char *)data, hash, b,0);
     if (index == UINT32_MAX) {
         fprintf(stderr, "Erreur lookup : fonction de hachage non trouvé\n");
         munmap(addr, size);
@@ -203,7 +202,7 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
         if (addr[test_block].premier != index) {
             continue;
         }
-        if (is_same_string(fd,addr, test_block, data,slowns)) {
+        if (is_same_string(fd,addr, test_block, data,slowns,0)) {
             found = 1;
             break;
         }

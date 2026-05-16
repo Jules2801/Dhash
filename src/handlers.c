@@ -121,7 +121,59 @@ int handle_insertstring(int argc, char **argv){
         return 0;
     }
 
+}
 
+int handle_insertfile(int argc, char **argv){
+
+    if(argc!=3){
+        fprintf(stderr, "il faut 3 paramètres\n");
+        return 1;
+    }
+    type_hash_t t_hash;
+    if((t_hash = check_extension(argv[0]))==UINT32_MAX){
+        return 1;
+    }
+
+    long slowns = atol(argv[1]);
+    int fd = open(argv[0], O_RDWR,0644);
+    if (fd == -1) {
+        perror("open hashtable");
+        return 1;
+    }
+    
+
+
+    struct stat sb = {0};
+    print_file_stats(fd, argv[0],&sb);
+    
+    int fd_file = open(argv[2],O_RDONLY,0644);
+    if (fd_file == -1){
+        perror("open file");
+        close(fd);
+        return 1;
+    }
+    struct stat sb_file = {0};
+    if (fstat(fd_file, &sb_file) == -1) {
+        perror("fstat file");
+        perror("fstat file");
+        close(fd_file);
+        close(fd);
+        return -1;
+    }
+    
+    char *file_name = argv[2];
+
+    if(insertfile(slowns, fd,fd_file,file_name,t_hash,sb.st_size,&sb_file)){
+        perror("Échec de la commande insertfile");
+        close(fd_file);
+        close(fd);
+        return 1;
+    }
+    else {
+        close(fd_file);
+        close(fd);
+        return 0;
+    }
 }
 
 int handle_free(int argc, char **argv) {

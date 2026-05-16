@@ -8,11 +8,12 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <time.h>
-
+#include <unistd.h>
 #include "../include/handlers.h"
 #include "../include/hash.h"
 #include "../include/command.h"
 #include "../include/file.h"
+#include "../include/insert_cmd.h"
 
 
 int print_file_stats(int fd, const char *filename,struct stat* sb) {
@@ -76,10 +77,12 @@ int handle_make(int argc, char **argv){
     print_file_stats(fd, argv[0],NULL);
     if(make(slowns, taille,fd)){
         perror("Échec de la commande make");
+        close(fd);
         return 1;
     }
     else{
         printf("[ make slowns : %ld, taille : %d ]\n",slowns,taille);    
+        close(fd);
         return 0;
     } 
 }
@@ -109,53 +112,58 @@ int handle_insertstring(int argc, char **argv){
     
     if(insertstring(slowns, data, fd, t_hash,sb.st_size)){
         perror("Échec de la commande insertstring");
+        close(fd);
         return 1;
     }
     else {
         printf("insertstring [ slowns : %ld, string : %s ]\n",slowns,data); 
+        close(fd);
         return 0;
     }
 
 
 }
 
-int handle_free(int argc,char** argv){
-    if(argc!=2){
+int handle_free(int argc, char **argv) {
+    if (argc != 2) {
         fprintf(stderr, "il faut 2 paramètres\n");
         return 1;
     }
-    
-    if(check_extension(argv[0])==-1){
+
+    if (check_extension(argv[0]) == -1) {
         return 1;
     }
 
     long slowns = atol(argv[1]);
-    int fd = open(argv[0], O_RDONLY,0644);
+    int fd = open(argv[0], O_RDONLY, 0644);
     if (fd == -1) {
         perror("open");
-        return 1;
+        return 1;  
     }
 
     struct stat sb = {0};
-    print_file_stats(fd, argv[0],&sb);
-    int fblocks;
-    size_t size = sb.st_size;
+    print_file_stats(fd, argv[0], &sb);
 
-    if((fblocks = free_blocks(slowns,fd,size))==-1){
+    size_t size = sb.st_size;
+    size_t blocks = size / 1024;
+
+    size_t free_count, object_count;
+    if (free_blocks(slowns, fd, size, &free_count, &object_count) == -1) {
         fprintf(stderr, "Erreur de la commande free\n");
+        close(fd);
         return 1;
     }
 
-    size_t blocks = size/1024;
-    double filling_rate  = ((double)(blocks - fblocks) / (double)blocks) * 100.0;
+    size_t occupied_count = blocks - free_count;
+    double filling_rate = (blocks > 0) ? (100.0 * (double)occupied_count / (double)blocks) : 0.0;
 
-    printf("%d bloque(s) libre(s) sur %zu bloque(s)\n",fblocks,blocks);
-    printf("Taux de remplissage : %.2f%%\n",filling_rate);
+    printf("Blocs libres    : %zu sur %zu\n", free_count, blocks);
+    printf("Blocs occupés   : %zu sur %zu\n", occupied_count, blocks);
+    printf("Nombre d'objets : %zu\n", object_count);
+    printf("Taux remplissage: %.2f%%\n", filling_rate);
 
+    close(fd);
     return 0;
-
-
-
 }
 
 #define perror_line(msg) \

@@ -5,8 +5,16 @@
 #include "type.h"
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/types.h>
 
 struct hache_entree;
+
+struct file_metadata {
+    uint64_t size;       // taille du fichier
+    uint64_t mtime;      // timestamp modif
+    uint32_t mode;       // permissions
+    uint32_t name_len;   // taille du nom
+};
 
 /**
  * @brief Écrit data dans la chaîne de blocs commençant à start_block
@@ -37,5 +45,8 @@ int fill_data(int fd, struct hache_entree *addr, size_t data_size,
  *         1 si erreur.
  */
 int insertstring(long slowns, char *data, int fd, type_hash_t hash, size_t size);
+
+int insertfile(long slowns,int fd,int file_fd,char* file_name,type_hash_t hash, size_t sizes,struct stat* sb_file);
+
 
 #endif

@@ -30,7 +30,7 @@ int main(int argc,char **argv){
         
     }
     if (strcmp(argv[1], "insertfile") == 0) {
-        printf("free\n");
+        handle_insertfile(argc-2, argv+2);
     }
     if (strcmp(argv[1], "lookup") == 0) {
         handle_lookup(argc-2, argv+2);

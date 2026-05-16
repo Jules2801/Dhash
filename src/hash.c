@@ -55,8 +55,7 @@ uint32_t sha1(unsigned char *data, int taille, uint32_t b){
 }
 
 
-uint32_t apply_hash(unsigned char *data,type_hash_t hash,uint32_t b){
-    size_t data_size = strlen((char *)data);
+uint32_t apply_hash(unsigned char *data,type_hash_t hash,uint32_t b,size_t data_size){
     if(hash==HASH_CKS){
         return checksum32(data, data_size, b);
     }else{

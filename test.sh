@@ -12,8 +12,11 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-TABLE_SHA="test_table.sha"
+TABLE_SHA="test_string.sha"
+TABLE_FILE="test_file.sha"
+SAMPLE_FILE="dictionnaire_officiel_scrabble_2012.txt"
 rm -f "$TABLE_SHA"
+rm -f "$TABLE_FILE"
 
 echo -e "\n${GREEN}=== Test 1: Création d'une table .sha (64 blocs) ===${NC}"
 ./hachement make "$TABLE_SHA" 0 64
@@ -30,15 +33,31 @@ echo -e "\n${GREEN}=== Test 3: Vérification de la présence (Lookup) ===${NC}"
 ./hachement lookup "$TABLE_SHA" 0 "toto"
 if [ $? -eq 0 ]; then echo "OK: 'toto' trouvé"; else echo -e "${RED}KO: 'toto' non trouvé${NC}"; fi
 
-echo -e "\n${GREEN}=== Test 4: Suppression par Hashcode fixe (44 pour 'toto') ===${NC}"
+echo -e "\n${GREEN}=== Test 4: Suppression par Hashcode fixe  ===${NC}"
 
-./hachement deletehash "$TABLE_SHA" 0 44 # 44 est le hashcode de toto
+./hachement deletehash "$TABLE_SHA" 0 "3" # 3 est le hashcode de toto
 ./hachement lookup "$TABLE_SHA" 0 "toto"
 
 if [ $? -ne 0 ]; then 
     echo "OK: 'toto' supprimé"
 else 
     echo -e "${RED}KO: 'toto' toujours là${NC}"
+fi
+
+echo -e "\n${GREEN}=== Test 5: Insertion de fichier (.sha) ===${NC}"
+./hachement make "$TABLE_FILE" 0 6400
+
+free_before=$(./hachement free "$TABLE_FILE" 0 | grep 'Blocs libres' | awk '{print $4}')
+./hachement insertfile "$TABLE_FILE" 0 "$SAMPLE_FILE"
+free_after=$(./hachement free "$TABLE_FILE" 0 | grep 'Blocs libres' | awk '{print $4}')
+
+echo "Blocs libres avant insertion fichier: $free_before"
+echo "Blocs libres après insertion fichier:  $free_after"
+
+if [ -n "$free_before" ] && [ -n "$free_after" ] && [ "$free_after" -lt "$free_before" ]; then
+    echo "OK: le fichier a bien été inséré"
+else
+    echo -e "${RED}KO: l'insertion du fichier n'a pas réduit le nombre de blocs libres${NC}"
 fi
 
 echo -e "\n${GREEN}=== Fin des tests (.sha) ===${NC}"

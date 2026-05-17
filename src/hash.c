@@ -46,11 +46,13 @@ uint32_t sha1(unsigned char *data, int taille, uint32_t b){
         return UINT32_MAX;
     }
     
-    // for(int i = 0; i < SHA_DIGEST_LENGTH; i++){
-    //     printf("%02x", hash[i]);
-    // }
+    for(int i = 0; i < SHA_DIGEST_LENGTH; i++){
+        printf("%02x", hash[i]);
+    }
+    printf("\n");
     uint32_t dernier;
     memcpy(&dernier, &hash[16], sizeof(uint32_t));
+    printf("val SHA1 : %d\n", dernier % b);
     return dernier % b;
 }
 

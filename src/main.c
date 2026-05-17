@@ -20,20 +20,19 @@ int main(int argc,char **argv){
     }
     
     if (strcmp(argv[1], "make") == 0) {
-        handle_make(argc-2, argv+2);
+        return handle_make(argc-2, argv+2);
     }
     if (strcmp(argv[1], "free") == 0) {
-        handle_free(argc-2,argv+2);
+        return handle_free(argc-2,argv+2);
     }
     if (strcmp(argv[1], "insertstring") == 0) {
-        handle_insertstring(argc-2, argv+2);
-        
+        return handle_insertstring(argc-2, argv+2);
     }
     if (strcmp(argv[1], "insertfile") == 0) {
-        handle_insertfile(argc-2, argv+2);
+        return handle_insertfile(argc-2, argv+2);
     }
     if (strcmp(argv[1], "lookup") == 0) {
-        handle_lookup(argc-2, argv+2);
+        return handle_lookup(argc-2, argv+2);
     }
     if (strcmp(argv[1], "deletehash") == 0) {
         printf("free\n");
@@ -55,6 +54,7 @@ int main(int argc,char **argv){
     }  
 
 
-   
+   fprintf(stderr, "commande inconnue\n");
+   return 1;
 
 }

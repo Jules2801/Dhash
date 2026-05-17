@@ -185,7 +185,7 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
         return -1;
     }
 
-    uint32_t index = apply_hash((unsigned char *)data, hash, b,0);
+    uint32_t index = apply_hash((unsigned char *)data, hash, b, strlen(data));
     if (index == UINT32_MAX) {
         fprintf(stderr, "Erreur lookup : fonction de hachage non trouvé\n");
         munmap(addr, size);
@@ -193,20 +193,32 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
     }
 
     int found = 0;
-    for (size_t i = 0; i < b; i++) {
-        uint32_t test_block = (index + i) % b;
+    
+    uint32_t current = addr[index].premier;
 
-        if (addr[test_block].longueur == 0xffffffffUL) {
-            break;
-        }
-        if (addr[test_block].premier != index) {
-            continue;
-        }
-        if (is_same_string(fd,addr, test_block, data,slowns,0)) {
+    while (current != 0xffffffffUL) {
+        lock_read_block(fd, current);
+
+        if (is_same_string(fd, addr, current, data, slowns, strlen(data))) {
             found = 1;
+            unlock_block(fd, current);
             break;
         }
+
+        // on saute tous les blocs de l'objet courant pour aller a la fin de la liste chainée
+        uint32_t next = current;
+        while (addr[next].suivant != 0xffffffffUL) {
+            next = addr[next].suivant;
+        }
+        
+        uint32_t next_obj = addr[next].suivant; 
+        
+        unlock_block(fd, current);
+        current = next_obj;
     }
+
+    // lookup de fichier
+
 
     munmap(addr, size);
     return found ? 0 : 1;

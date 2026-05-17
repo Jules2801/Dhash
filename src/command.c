@@ -168,16 +168,13 @@ int free_blocks(long slowns, int fd, size_t size,size_t *free_count, size_t *obj
 
 
 int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
-    if (sleep_nano(slowns)) {
-        return -1;
-    }
-
     if (size < 1024) {
         fprintf(stderr, "Erreur lookup: taille de table invalide\n");
         return -1;
     }
 
     size_t b = size / 1024;
+    size_t data_len = strlen(data);
 
     struct hache_entree *addr = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
     if (addr == MAP_FAILED) {
@@ -185,44 +182,66 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
         return -1;
     }
 
-    uint32_t index = apply_hash((unsigned char *)data, hash, b, strlen(data));
+    uint32_t index = apply_hash((unsigned char *)data, hash, b, data_len);
     if (index == UINT32_MAX) {
         fprintf(stderr, "Erreur lookup : fonction de hachage non trouvé\n");
         munmap(addr, size);
         return -1;
     }
 
-    int found = 0;
-    
+    // Lock pour pouvoir lire les champs
+    lock_read_block(fd, index);
+
+    // Case libre ou pas de chaîne pour ce hash -> pas trouvé
+    if (addr[index].longueur == 0xffffffffUL || 
+        addr[index].premier == 0xffffffffUL) {
+        sleep_nano(slowns);
+        unlock_block(fd, index);
+        munmap(addr, size);
+        return 1;
+    }
+
+    // Aller a la tête de la chaîne (peut être ailleurs en CAS 2)
     uint32_t current = addr[index].premier;
-
-    while (current != 0xffffffffUL) {
+    if (current != index) {
         lock_read_block(fd, current);
+        sleep_nano(slowns);
+        unlock_block(fd, index);
+    }
 
-        if (is_same_string(fd, addr, current, data, slowns, strlen(data))) {
+    // parcours de la chaine
+    int found = 0;
+    while (1) {
+        if (is_same_string(fd, addr, current, data, slowns, data_len)) {
             found = 1;
+            sleep_nano(slowns);
             unlock_block(fd, current);
             break;
         }
 
-        // on saute tous les blocs de l'objet courant pour aller a la fin de la liste chainée
-        uint32_t next = current;
-        while (addr[next].suivant != 0xffffffffUL) {
-            next = addr[next].suivant;
+        // Aller au dernier bloc de l'objet courant si il est > 1012
+        while (addr[current].longueur > 1012) {
+            uint32_t cont = addr[current].suivant;
+            lock_read_block(fd, cont);
+            sleep_nano(slowns);
+            unlock_block(fd, current);
+            current = cont;
         }
-        
-        uint32_t next_obj = addr[next].suivant; 
-        
+
+        // pas d'objet suivant dans la chaîne ?
+        if (addr[current].suivant == 0xffffffffUL) {
+            sleep_nano(slowns);
+            unlock_block(fd, current);
+            break;
+        }
+        uint32_t next = addr[current].suivant;
+        lock_read_block(fd, next);
+        sleep_nano(slowns);
         unlock_block(fd, current);
-        current = next_obj;
+        current = next;
     }
-
-    // lookup de fichier
-
 
     munmap(addr, size);
     return found ? 0 : 1;
 }
-
-
 

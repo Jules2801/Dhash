@@ -60,4 +60,13 @@ else
     echo -e "${RED}KO: l'insertion du fichier n'a pas réduit le nombre de blocs libres${NC}"
 fi
 
+echo -e "\n${GREEN}=== Test 6: Lookup du fichier inséré ===${NC}"
+./hachement lookup "$TABLE_FILE" 0 "$SAMPLE_FILE"
+if [ $? -ne 0 ]; then
+    echo -e "${RED}KO: le fichier n'a pas été retrouvé par lookup${NC}"
+else
+    echo "OK: le fichier a été retrouvé par lookup"
+fi
+
+
 echo -e "\n${GREEN}=== Fin des tests (.sha) ===${NC}"

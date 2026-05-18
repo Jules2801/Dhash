@@ -164,7 +164,7 @@ int handle_insertfile(int argc, char **argv){
     char *file_name = argv[2];
 
     if(insertfile(slowns, fd,fd_file,file_name,t_hash,sb.st_size,&sb_file)){
-        perror("Échec de la commande insertfile");
+        fprintf(stderr, "Échec de la commande insertfile");
         close(fd_file);
         close(fd);
         return 1;
@@ -241,17 +241,40 @@ int handle_lookup(int argc, char **argv) {
 
     struct stat sb = {0};
     print_file_stats(fd, argv[0], &sb);
+    
+    // Si l'argument est un fichier ordinaire on fait un lookup_file_by_name
+    struct stat sb_target = {0};
+    if (stat(argv[2], &sb_target) == 0 && S_ISREG(sb_target.st_mode)) {
+        int rc = lookup_file_by_name(slowns, argv[2], fd, t_hash, sb.st_size);
+        if (rc == 0) {
+            printf("lookup : trouvé\n");
+            close(fd);
+            return 0;
+        }
+        if (rc == 1) {
+            printf("lookup : non trouvé\n");
+            close(fd);
+            return 1;
+        }
+        fprintf(stderr, "Erreur de la commande lookup (fichier)\n");
+        close(fd);
+        return 1;
+    }
 
+    // sinon lookup classique sur la chaîne
     int res = lookup(slowns, argv[2], fd, t_hash, sb.st_size);
     if (res == 0) {
         printf("lookup : trouvé\n");
+        close(fd);
         return 0;
     }
     if (res == 1) {
         printf("lookup : non trouvé\n");
+        close(fd);
         return 1;
     }
 
     fprintf(stderr, "Erreur de la commande lookup\n");
+    close(fd);
     return 1;
 }

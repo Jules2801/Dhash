@@ -168,7 +168,7 @@ int free_blocks(long slowns, int fd, size_t size,size_t *free_count, size_t *obj
 
 
 
-
+//Pour les strings
 int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
     if (size < 1024) {
         fprintf(stderr, "Erreur lookup: taille de table invalide\n");
@@ -190,6 +190,12 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
         munmap(addr, size);
         return -1;
     }
+
+    //on ajoute le type s (pour verifier avec les string typé dans la table)
+    size_t data_typed_size = data_len+1;
+    char *data_typed = malloc(data_typed_size);
+    data_typed[0]='s';
+    memcpy(data_typed+1,data,data_len);
 
     // Lock pour pouvoir lire les champs
     lock_read_block(fd, index);
@@ -214,7 +220,7 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
     // parcours de la chaine
     int found = 0;
     while (1) {
-        if (is_same_string(fd, addr, current, data, slowns, data_len)) {
+        if (is_same_string(fd, addr, current, data_typed, slowns, data_typed_size)) {
             found = 1;
             sleep_nano(slowns);
             unlock_block(fd, current);

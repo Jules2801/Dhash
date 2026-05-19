@@ -248,9 +248,6 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
 }
 
 int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t hash, size_t size) {
-    if (sleep_nano(slowns)) {
-        return -1;
-    }
 
     if (size < 1024) {
         fprintf(stderr, "Erreur lookup_file: taille de table invalide\n");
@@ -275,7 +272,11 @@ int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t h
     }
 
     // 2. Vérifier si le slot est libre
+
+    lock_read_block(fd, filename_hash);
     if (addr[filename_hash].longueur == 0xffffffffUL || addr[filename_hash].premier == 0xffffffffUL) {
+        sleep_nano(slowns);
+        unlock_block(fd, filename_hash);
         munmap(addr, size);
         return 1;  // Fichier non trouvé
     }
@@ -286,10 +287,7 @@ int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t h
         lock_read_block(fd, current);
         sleep_nano(slowns);
         unlock_block(fd, filename_hash);
-    } else { 
-        // On commence directement à filename_hash
-        lock_read_block(fd, filename_hash);
-    }
+    } 
 
     uint32_t name_entry_block = 0xffffffffUL;
 
@@ -361,8 +359,11 @@ int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t h
 
         // Extraire le nom du fichier stocké
         char file_name[1024] = {0};
-        if (metadata.name_len > 0 && metadata.name_len <= 1023) {
+        if (metadata.name_len > 0 && 1 + sizeof(metadata) + metadata.name_len <= 1012 &&
+            metadata.name_len < sizeof(file_name)) {
             memcpy(file_name, addr[h_file].obj + 1 + sizeof(metadata), metadata.name_len);
+        } else if (metadata.name_len > 0) {
+            snprintf(file_name, sizeof(file_name), "<nom trop long, %u octets>", metadata.name_len);
         }
 
         // Formater la date
@@ -378,7 +379,7 @@ int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t h
         // Afficher les métadonnées
         printf("  Version %u:\n", i + 1);
         printf("    Nom stocké: %s\n", file_name);
-        printf("    Taille: %zu octets\n", metadata.size);
+        printf("    Taille: %zu octets\n", (size_t)metadata.size);
         printf("    Modifié: %s\n", time_str);
         printf("    Mode: 0%o\n", metadata.mode);
         printf("    Hashcode: %u\n", h_file);

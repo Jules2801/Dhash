@@ -8,12 +8,14 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "../include/hash.h"
 #include "../include/command.h"
 #include "../include/lock.h"
 #include "../include/type.h"
 #include "../include/utils.h"
+#include "../include/insert_cmd.h"
 
 
 
@@ -243,5 +245,153 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
 
     munmap(addr, size);
     return found ? 0 : 1;
+}
+
+int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t hash, size_t size) {
+
+    if (size < 1024) {
+        fprintf(stderr, "Erreur lookup_file: taille de table invalide\n");
+        return -1;
+    }
+
+    size_t b = size / 1024;
+    size_t name_len = strlen(filename);
+
+    struct hache_entree *addr = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+    if (addr == MAP_FAILED) {
+        perror("mmap");
+        return -1;
+    }
+
+    // 1. Calculer le hash
+    uint32_t filename_hash = apply_hash((unsigned char *)filename, hash, b, name_len);
+    if (filename_hash == UINT32_MAX) {
+        fprintf(stderr, "Erreur lookup_file: fonction de hachage non trouvée\n");
+        munmap(addr, size);
+        return -1;
+    }
+
+    // 2. Vérifier si le slot est libre
+
+    lock_read_block(fd, filename_hash);
+    if (addr[filename_hash].longueur == 0xffffffffUL || addr[filename_hash].premier == 0xffffffffUL) {
+        sleep_nano(slowns);
+        unlock_block(fd, filename_hash);
+        munmap(addr, size);
+        return 1;  // Fichier non trouvé
+    }
+
+    // Parcourir la chaîne avec un read_lock et chercher entrée 'n'
+    uint32_t current = addr[filename_hash].premier;
+    if (current != filename_hash) {
+        lock_read_block(fd, current);
+        sleep_nano(slowns);
+        unlock_block(fd, filename_hash);
+    } 
+
+    uint32_t name_entry_block = 0xffffffffUL;
+
+    while (1) {
+        // Chercher le 'n' 
+        if (addr[current].obj[0] == 'n' && 1 + sizeof(uint32_t) + name_len <= 1012) {
+            uint32_t stored_name_len;
+            memcpy(&stored_name_len, addr[current].obj + 1, sizeof(uint32_t));
+            if (stored_name_len == name_len &&
+                memcmp(addr[current].obj + 1 + sizeof(uint32_t), filename, name_len) == 0) {
+                // on a trouvé
+                name_entry_block = current;
+                break;
+            }
+        }
+
+        // Aller au dernier bloc si longueur > 1012
+        while (addr[current].longueur > 1012) {
+            uint32_t cont = addr[current].suivant;
+            lock_read_block(fd, cont);
+            sleep_nano(slowns);
+            unlock_block(fd, current);
+            current = cont;
+        }
+
+        // pas d'objet suivant dans la chaîne ?
+        if (addr[current].suivant == 0xffffffffUL) {
+            sleep_nano(slowns);
+            unlock_block(fd, current);
+            munmap(addr, size);
+            return 1;  // Non trouvé
+        }
+
+        uint32_t next = addr[current].suivant;
+        lock_read_block(fd, next);
+        sleep_nano(slowns);
+        unlock_block(fd, current);
+        current = next;
+    }
+
+    // 3. Lire la liste des hashes h_file
+    size_t h_file_offset = 1 + sizeof(uint32_t) + name_len;
+    uint32_t h_file_count = (addr[name_entry_block].longueur - h_file_offset) / sizeof(uint32_t);
+
+    printf("Fichier '%s' trouvé avec %d version(s):\n", filename, h_file_count);
+
+    // 4. Pour chaque h_file, afficher métadonnées
+    for (uint32_t i = 0; i < h_file_count; i++) {
+        uint32_t h_file;
+        memcpy(&h_file, addr[name_entry_block].obj + h_file_offset + i * sizeof(uint32_t), sizeof(uint32_t));
+
+        if (h_file >= b) {
+            fprintf(stderr, "Erreur: hashcode %d hors limites\n", h_file);
+            continue;
+        }
+
+        // Lire l'entrée 'f' à addr[h_file]
+        lock_read_block(fd, h_file);
+
+        if (addr[h_file].longueur == 0xffffffffUL || addr[h_file].obj[0] != 'f') {
+            fprintf(stderr, "Erreur: bloc %d n'est pas un fichier\n", h_file);
+            sleep_nano(slowns);
+            unlock_block(fd, h_file);
+            continue;
+        }
+
+        struct file_metadata metadata;
+        memcpy(&metadata, addr[h_file].obj + 1, sizeof(metadata));
+
+        // Extraire le nom du fichier stocké
+        char file_name[1024] = {0};
+        if (metadata.name_len > 0 && 1 + sizeof(metadata) + metadata.name_len <= 1012 &&
+            metadata.name_len < sizeof(file_name)) {
+            memcpy(file_name, addr[h_file].obj + 1 + sizeof(metadata), metadata.name_len);
+        } else if (metadata.name_len > 0) {
+            snprintf(file_name, sizeof(file_name), "<nom trop long, %u octets>", metadata.name_len);
+        }
+
+        // Formater la date
+        time_t mtime = (time_t)metadata.mtime;
+        char time_str[32] = {0};
+        ctime_r(&mtime, time_str);
+        // ajout d'une \0 à la place du \n 
+        size_t len = strlen(time_str);
+        if (len > 0 && time_str[len - 1] == '\n') {
+            time_str[len - 1] = '\0';
+        }
+
+        // Afficher les métadonnées
+        printf("  Version %u:\n", i + 1);
+        printf("    Nom stocké: %s\n", file_name);
+        printf("    Taille: %zu octets\n", (size_t)metadata.size);
+        printf("    Modifié: %s\n", time_str);
+        printf("    Mode: 0%o\n", metadata.mode);
+        printf("    Hashcode: %u\n", h_file);
+
+        sleep_nano(slowns);
+        unlock_block(fd, h_file);
+    }
+
+    sleep_nano(slowns);
+    unlock_block(fd, name_entry_block);
+
+    munmap(addr, size);
+    return 0;
 }
 

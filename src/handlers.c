@@ -253,7 +253,7 @@ int handle_lookup(int argc, char **argv) {
     } else if (entry_type == 's') {
         is_file_target = false;
     } else {
-        fprintf(stderr, "Corruption détectée (type d'entrée inconnu)\n");
+        fprintf(stderr, "Lookup : n'est pas dans la table\n");
         close(fd);
         return 1;
     }

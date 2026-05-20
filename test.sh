@@ -5,7 +5,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 echo -e "${GREEN}=== Compilation du projet ===${NC}"
-gcc -Wall -Wextra src/*.c -lcrypto -fsanitize=address,leak,undefined -o hachement
+make
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Erreur de compilation !${NC}"

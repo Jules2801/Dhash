@@ -256,22 +256,30 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
 static void print_file_content(int fd, struct hache_entree *addr, uint32_t h_file, size_t b, size_t size_content, size_t content_offset, long slowns) {
     uint32_t curr = h_file;
     size_t written = 0;
+    // Parcours des blocs de données du fichier
     while (written < size_content) {
+        // Lock pour pouvoir lire le bloc courant
         lock_read_block(fd, curr);
+        // Vérification si le bloc est libre
         if (addr[curr].longueur == 0xffffffffUL) {
             sleep_nano(slowns);
             unlock_block(fd, curr);
             fprintf(stderr, "Erreur: bloc de continuation libre\n");
             break;
         }
+        // Espace disponible dans le bloc courant (1012 octets max pour les continuations, diminué de l'offset de l'en-tête pour le premier bloc)
         size_t chunk_avail = (written == 0) ? (1012 - content_offset) : 1012;
+        // Pointeur vers le début des données utiles du bloc courant (après l'en-tête pour le premier bloc, ou au début de obj sinon)
         char *chunk_ptr = (written == 0) ? (addr[curr].obj + content_offset) : addr[curr].obj;
+        // Nombre d'octets à écrire (le reste des données s'il est plus petit que l'espace disponible, sinon tout l'espace disponible)
         size_t to_write = (size_content - written < chunk_avail) ? (size_content - written) : chunk_avail;
-        fwrite(chunk_ptr, 1, to_write, stdout);
+        // Écriture du fragment sur la sortie standard (STDOUT)
+        write(STDOUT_FILENO, chunk_ptr, to_write);
         written += to_write;
         uint32_t next = addr[curr].suivant;
         sleep_nano(slowns);
         unlock_block(fd, curr);
+        // bloc suivant si nécessaire
         if (written < size_content) {
             if (next == 0xffffffffUL || next >= b) {
                 fprintf(stderr, "Erreur: bloc de continuation invalide ou fin prématurée\n");
@@ -298,22 +306,30 @@ static void save_file_content(int fd, struct hache_entree *addr, uint32_t h_file
             } else {
                 uint32_t curr = h_file;
                 size_t written = 0;
+                // parcours des blocs pour copier
                 while (written < size_content) {
+                    // Lock du contenu courant
                     lock_read_block(fd, curr);
+                    // Vérification si le bloc est libre
                     if (addr[curr].longueur == 0xffffffffUL) {
                         sleep_nano(slowns);
                         unlock_block(fd, curr);
                         fprintf(stderr, "Erreur: bloc de continuation libre\n");
                         break;
                     }
+                    // Espace disponible dans le bloc courant (1012 octets max pour les continuations, diminué de l'offset de l'en-tête pour le premier bloc)
                     size_t chunk_avail = (written == 0) ? (1012 - content_offset) : 1012;
+                    // Pointeur vers le début des données utiles du bloc courant (après l'en-tête pour le premier bloc, ou au début de obj sinon)
                     char *chunk_ptr = (written == 0) ? (addr[curr].obj + content_offset) : addr[curr].obj;
+                    // Nombre d'octets à écrire (le reste des données s'il est plus petit que l'espace disponible, sinon tout l'espace disponible)
                     size_t to_write = (size_content - written < chunk_avail) ? (size_content - written) : chunk_avail;
+                    // écriture du bloc dans le fichier de destination
                     memcpy(out_addr + written, chunk_ptr, to_write);
                     written += to_write;
                     uint32_t next = addr[curr].suivant;
                     sleep_nano(slowns);
                     unlock_block(fd, curr);
+                    // bloc suivant si nécessaire
                     if (written < size_content) {
                         if (next == 0xffffffffUL || next >= b) {
                             fprintf(stderr, "Erreur: bloc de continuation invalide ou fin prématurée\n");

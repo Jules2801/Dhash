@@ -698,6 +698,95 @@ char detect_key_type(long slowns, const char *key, int fd, type_hash_t hash, siz
 }
 
 int delete_file(long slowns, char *data, int fd, type_hash_t hash, size_t size){
-    (void)slowns; (void)data; (void)fd; (void)hash; (void)size;
-    return 0;
+    if (size < 1024) {
+        fprintf(stderr, "Erreur delete_file: taille de table invalide\n");
+        return -1;
+    }
+
+    size_t b = size / 1024;
+    size_t name_len = strlen(data);
+
+    struct hache_entree *addr = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+    if (addr == MAP_FAILED) {
+        perror("mmap");
+        return -1;
+    }
+
+    uint32_t filename_hash = apply_hash((unsigned char *)data, hash, b, name_len);
+    if (filename_hash == UINT32_MAX) {
+        fprintf(stderr, "Erreur delete_file: fonction de hachage non trouvée\n");
+        munmap(addr, size);
+        return -1;
+    }
+
+    lock_read_block(fd, filename_hash);
+    if (addr[filename_hash].longueur == 0xffffffffUL || addr[filename_hash].premier == 0xffffffffUL) {
+        sleep_nano(slowns);
+        unlock_block(fd, filename_hash);
+        munmap(addr, size);
+        return 1;  
+    }
+
+    uint32_t current = addr[filename_hash].premier;
+    if (current != filename_hash) {
+        lock_read_block(fd, current);
+        sleep_nano(slowns);
+        unlock_block(fd, filename_hash);
+    } 
+
+    uint32_t name_entry_block = 0xffffffffUL;
+
+    while (current != 0xffffffffUL) {
+        if (addr[current].obj[0] == 'n' && 1 + sizeof(uint32_t) + name_len <= 1012) {
+            uint32_t stored_name_len;
+            memcpy(&stored_name_len, addr[current].obj + 1, sizeof(uint32_t));
+            if (stored_name_len == name_len &&
+                memcmp(addr[current].obj + 1 + sizeof(uint32_t), data, name_len) == 0) {
+                name_entry_block = current;
+                break;
+            }
+        }
+        current = next_chain_entry(fd, addr, current, slowns);
+    }
+
+    if (name_entry_block == 0xffffffffUL) {
+        munmap(addr, size);
+        return 1;
+    }
+
+    size_t h_file_offset = 1 + sizeof(uint32_t) + name_len;
+    uint32_t h_file_count = (addr[name_entry_block].longueur - h_file_offset) / sizeof(uint32_t);
+
+    uint32_t *h_files = NULL;
+    if (h_file_count > 0) {
+        h_files = malloc(h_file_count * sizeof(uint32_t));
+        if (!h_files) {
+            perror("malloc");
+            sleep_nano(slowns);
+            unlock_block(fd, name_entry_block);
+            munmap(addr, size);
+            return -1;
+        }
+
+        for (uint32_t i = 0; i < h_file_count; i++) {
+            memcpy(&h_files[i], addr[name_entry_block].obj + h_file_offset + i * sizeof(uint32_t), sizeof(uint32_t));
+        }
+    }
+
+    sleep_nano(slowns);
+    unlock_block(fd, name_entry_block);
+    munmap(addr, size);
+
+    int deleted = 0;
+
+    for (uint32_t i = 0; i < h_file_count; i++) {
+        int res = deletehash(slowns, h_files[i], fd, size);
+        if (res > 0) deleted += res;
+    }
+
+    free(h_files);
+    int res = deletehash(slowns, filename_hash, fd, size);
+    if (res > 0) deleted += res;
+
+    return deleted;
 }

@@ -15,6 +15,7 @@ fi
 TABLE_SHA="test_string.sha"
 TABLE_FILE="test_file.sha"
 SAMPLE_FILE="dictionnaire_officiel_scrabble_2012.txt"
+
 rm -f "$TABLE_SHA"
 rm -f "$TABLE_FILE"
 
@@ -84,7 +85,7 @@ if diff "$SAMPLE_FILE" test_save.txt > /dev/null; then
 else
     echo -e "${RED}KO: le contenu du fichier ne correspond pas (save)${NC}"
 fi
-
+rm -f test_save.txt
 
 
 echo -e "\n${GREEN}=== Test 7: Suppression de chaîne avec delete ===${NC}"

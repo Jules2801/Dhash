@@ -102,6 +102,14 @@ int handle_shrink(int argc, char **argv);
 int handle_ajust(int argc, char **argv);
 
 /**
+ * @brief Gère la commande 'insertlines' table file slown nb threads
+ * @param argc Nombre d'arguments
+ * @param argv Tableau des arguments
+ * @return 0 si succès, 1 si erreur
+ */
+int handle_insertlines(int argc, char **argv);
+
+/**
  * @brief Affiche l'aide globale du programme si l'utilisateur se trompe
  * Usage : ./hachement, sans rien ou avec des arguments non valide 
  * @param nom_programme Le nom de l'exécutable (généralement argv[0])

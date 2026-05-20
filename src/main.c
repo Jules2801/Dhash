@@ -50,6 +50,9 @@ int main(int argc,char **argv){
     if (strcmp(argv[1], "ajust") == 0) {
         printf("free\n");
     }  
+    if (strcmp(argv[1], "insertlines") == 0) {
+        return handle_insertlines(argc-2, argv+2);
+    }
 
 
    fprintf(stderr, "commande inconnue\n");

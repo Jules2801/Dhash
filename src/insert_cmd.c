@@ -457,19 +457,6 @@ int insertstring(long slowns, char *data, int fd, type_hash_t hash, size_t size)
 }
 
 
-struct chunk_read {
-    char *file_addr;       
-    size_t file_size;      
-    size_t start;          
-    size_t end;            
-    int fd;               
-    type_hash_t hash;
-    size_t table_size;
-    long slowns;
-};
-
-
-
 void* insertlines_worker(void* args){
     struct chunk_read * cr = (struct chunk_read*) args;
 

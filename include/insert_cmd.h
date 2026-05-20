@@ -16,6 +16,17 @@ struct file_metadata {
     uint32_t name_len;   // taille du nom
 };
 
+struct chunk_read {
+    char *file_addr;       
+    size_t file_size;      
+    size_t start;          
+    size_t end;            
+    int fd;               
+    type_hash_t hash;
+    size_t table_size;
+    long slowns;
+};
+
 /**
  * @brief Écrit data dans la chaîne de blocs commençant à start_block
  *

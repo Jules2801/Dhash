@@ -222,8 +222,8 @@ int handle_free(int argc, char **argv) {
     fprintf(stderr, "%s:%d %s: %s\n", __FILE__, __LINE__, msg, strerror(errno))
 
 int handle_lookup(int argc, char **argv) {
-    if (argc != 3) {
-        fprintf(stderr, "il faut 3 paramètres\n");
+    if (argc < 3) {
+        fprintf(stderr, "il faut au moins 3 paramètres : <fichier_table> <slowns> <string/nom_fichier>\n");
         return 1;
     }
 
@@ -240,19 +240,105 @@ int handle_lookup(int argc, char **argv) {
     }
 
     struct stat sb = {0};
-    print_file_stats(fd, argv[0], &sb);
-    
-    // Si l'argument est un fichier ordinaire on fait un lookup_file_by_name
     struct stat sb_target = {0};
-    if (stat(argv[2], &sb_target) == 0 && S_ISREG(sb_target.st_mode)) {
-        int rc = lookup_file_by_name(slowns, argv[2], fd, t_hash, sb.st_size);
+    bool is_file_target = (stat(argv[2], &sb_target) == 0 && S_ISREG(sb_target.st_mode));
+
+    lookup_action_t action = ACTION_INFO;
+    char save_dest[1024] = {0};
+    int version = -1;
+
+    if (is_file_target) {
+        // Prompt user
+        fprintf(stderr, "Choisir une action pour le fichier :\n");
+        fprintf(stderr, "  1. Afficher les informations (info)\n");
+        fprintf(stderr, "  2. Afficher le contenu (print)\n");
+        fprintf(stderr, "  3. Sauvegarder le contenu (save)\n");
+        fprintf(stderr, "Votre choix [1-3] (défaut: info) : ");
+
+        char choice_buf[20];
+        if (fgets(choice_buf, sizeof(choice_buf), stdin)) {
+            size_t len = strlen(choice_buf);
+            if (len > 0 && choice_buf[len - 1] == '\n') {
+                choice_buf[len - 1] = '\0';
+            }
+            if (strcmp(choice_buf, "1") == 0 || strcasecmp(choice_buf, "info") == 0) {
+                action = ACTION_INFO;
+            } else if (strcmp(choice_buf, "2") == 0 || strcasecmp(choice_buf, "print") == 0) {
+                action = ACTION_PRINT;
+            } else if (strcmp(choice_buf, "3") == 0 || strcasecmp(choice_buf, "save") == 0) {
+                action = ACTION_SAVE;
+            } else {
+                fprintf(stderr, "Choix inconnu, utilisation de l'action par défaut 'info'\n");
+            }
+        }
+
+        if (action == ACTION_PRINT || action == ACTION_SAVE) {
+            fprintf(stderr, "Entrez le numéro de version à récupérer (laisser vide pour la dernière) : ");
+            char ver_buf[10];
+            if (fgets(ver_buf, sizeof(ver_buf), stdin)) {
+                size_t len = strlen(ver_buf);
+                if (len > 0 && ver_buf[len - 1] == '\n') {
+                    ver_buf[len - 1] = '\0';
+                }
+                if (strlen(ver_buf) > 0) {
+                    version = atoi(ver_buf);
+                }
+            }
+        }
+
+        if (action == ACTION_SAVE) {
+            while (1) {
+                fprintf(stderr, "Entrez le chemin du fichier de destination : ");
+                if (fgets(save_dest, sizeof(save_dest), stdin)) {
+                    size_t len = strlen(save_dest);
+                    if (len > 0 && save_dest[len - 1] == '\n') {
+                        save_dest[len - 1] = '\0';
+                    }
+                    if (strlen(save_dest) > 0) {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+                fprintf(stderr, "Le chemin de destination ne peut pas être vide.\n");
+            }
+        }
+    }
+
+    // Print table stats
+    if (is_file_target && action == ACTION_PRINT) {
+        struct stat local_sb;
+        if (fstat(fd, &local_sb) == -1) {
+            perror("fstat");
+        } else {
+            fprintf(stderr, "nom du fichier : %s\n", argv[0]);
+            fprintf(stderr, "taille du fichier : %lld octets\n", (long long)local_sb.st_size);
+            char time_buf[32];
+            ctime_r(&local_sb.st_mtime, time_buf);
+            fprintf(stderr, "dernière modif du fichier : %s", time_buf);
+            sb = local_sb;
+        }
+    } else {
+        print_file_stats(fd, argv[0], &sb);
+    }
+
+    if (is_file_target) {
+        int rc = lookup_file_by_name(slowns, argv[2], fd, t_hash, sb.st_size, action, save_dest, version);
         if (rc == 0) {
-            printf("lookup : trouvé\n");
+            if (action == ACTION_PRINT) {
+                fprintf(stderr, "lookup : trouvé\n");
+            } else {
+                printf("lookup : trouvé\n");
+            }
             close(fd);
             return 0;
         }
         if (rc == 1) {
-            printf("lookup : non trouvé\n");
+            if (action == ACTION_PRINT) {
+                fprintf(stderr, "lookup : non trouvé\n");
+            } else {
+                printf("lookup : non trouvé\n");
+            }
             close(fd);
             return 1;
         }

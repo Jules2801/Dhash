@@ -61,12 +61,28 @@ else
 fi
 
 echo -e "\n${GREEN}=== Test 6: Lookup du fichier inséré ===${NC}"
-./hachement lookup "$TABLE_FILE" 0 "$SAMPLE_FILE"
+echo "info" | ./hachement lookup "$TABLE_FILE" 0 "$SAMPLE_FILE"
 if [ $? -ne 0 ]; then
     echo -e "${RED}KO: le fichier n'a pas été retrouvé par lookup${NC}"
 else
     echo "OK: le fichier a été retrouvé par lookup"
 fi
 
+echo -e "\n${GREEN}=== Test 6b: Print du fichier inséré ===${NC}"
+printf "print\n\n" | ./hachement lookup "$TABLE_FILE" 0 "$SAMPLE_FILE" > test_print.txt
+if diff "$SAMPLE_FILE" test_print.txt > /dev/null; then
+    echo "OK: le contenu du fichier correspond (print)"
+else
+    echo -e "${RED}KO: le contenu du fichier ne correspond pas (print)${NC}"
+fi
+rm -f test_print.txt
 
+echo -e "\n${GREEN}=== Test 6c: Save du fichier inséré ===${NC}"
+printf "save\n\ntest_save.txt\n" | ./hachement lookup "$TABLE_FILE" 0 "$SAMPLE_FILE"
+if diff "$SAMPLE_FILE" test_save.txt > /dev/null; then
+    echo "OK: le contenu du fichier correspond (save)"
+else
+    echo -e "${RED}KO: le contenu du fichier ne correspond pas (save)${NC}"
+fi
+rm -f test_save.txt
 echo -e "\n${GREEN}=== Fin des tests (.sha) ===${NC}"

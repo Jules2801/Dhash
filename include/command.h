@@ -32,6 +32,12 @@ int free_blocks(long slowns, int fd, size_t size,size_t *free_count, size_t *obj
 
 int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size);
 
+typedef enum {
+    ACTION_INFO,
+    ACTION_PRINT,
+    ACTION_SAVE
+} lookup_action_t;
+
 /**
  * @brief Recherche un fichier par nom et affiche ses métadonnées et les hashes des versions
  * @param filename Nom du fichier à chercher
@@ -39,7 +45,7 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size);
  * @param size taille de la table
  * @return 0 si trouvé, 1 si non trouvé, -1 si erreur
  */
-int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t hash, size_t size);
+int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t hash, size_t size, lookup_action_t action, const char *save_dest, int version);
 
 #endif
 

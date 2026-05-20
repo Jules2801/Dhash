@@ -247,7 +247,84 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
     return found ? 0 : 1;
 }
 
-int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t hash, size_t size) {
+static void print_file_content(int fd, struct hache_entree *addr, uint32_t h_file, size_t b, size_t size_content, size_t content_offset, long slowns) {
+    uint32_t curr = h_file;
+    size_t written = 0;
+    while (written < size_content) {
+        lock_read_block(fd, curr);
+        if (addr[curr].longueur == 0xffffffffUL) {
+            sleep_nano(slowns);
+            unlock_block(fd, curr);
+            fprintf(stderr, "Erreur: bloc de continuation libre\n");
+            break;
+        }
+        size_t chunk_avail = (written == 0) ? (1012 - content_offset) : 1012;
+        char *chunk_ptr = (written == 0) ? (addr[curr].obj + content_offset) : addr[curr].obj;
+        size_t to_write = (size_content - written < chunk_avail) ? (size_content - written) : chunk_avail;
+        fwrite(chunk_ptr, 1, to_write, stdout);
+        written += to_write;
+        uint32_t next = addr[curr].suivant;
+        sleep_nano(slowns);
+        unlock_block(fd, curr);
+        if (written < size_content) {
+            if (next == 0xffffffffUL || next >= b) {
+                fprintf(stderr, "Erreur: bloc de continuation invalide ou fin prématurée\n");
+                break;
+            }
+            curr = next;
+        }
+    }
+}
+
+static void save_file_content(int fd, struct hache_entree *addr, uint32_t h_file, size_t b, size_t size_content, size_t content_offset, long slowns, const char *save_dest, mode_t mode, uint32_t version_num) {
+    int out_fd = open(save_dest, O_RDWR | O_CREAT | O_TRUNC, mode);
+    if (out_fd == -1) {
+        perror("open save destination");
+        return;
+    }
+    if (size_content > 0) {
+        if (ftruncate(out_fd, size_content) == -1) {
+            perror("ftruncate save destination");
+        } else {
+            char *out_addr = mmap(NULL, size_content, PROT_READ | PROT_WRITE, MAP_SHARED, out_fd, 0);
+            if (out_addr == MAP_FAILED) {
+                perror("mmap save destination");
+            } else {
+                uint32_t curr = h_file;
+                size_t written = 0;
+                while (written < size_content) {
+                    lock_read_block(fd, curr);
+                    if (addr[curr].longueur == 0xffffffffUL) {
+                        sleep_nano(slowns);
+                        unlock_block(fd, curr);
+                        fprintf(stderr, "Erreur: bloc de continuation libre\n");
+                        break;
+                    }
+                    size_t chunk_avail = (written == 0) ? (1012 - content_offset) : 1012;
+                    char *chunk_ptr = (written == 0) ? (addr[curr].obj + content_offset) : addr[curr].obj;
+                    size_t to_write = (size_content - written < chunk_avail) ? (size_content - written) : chunk_avail;
+                    memcpy(out_addr + written, chunk_ptr, to_write);
+                    written += to_write;
+                    uint32_t next = addr[curr].suivant;
+                    sleep_nano(slowns);
+                    unlock_block(fd, curr);
+                    if (written < size_content) {
+                        if (next == 0xffffffffUL || next >= b) {
+                            fprintf(stderr, "Erreur: bloc de continuation invalide ou fin prématurée\n");
+                            break;
+                        }
+                        curr = next;
+                    }
+                }
+                munmap(out_addr, size_content);
+            }
+        }
+    }
+    close(out_fd);
+    printf("Contenu de la version %u sauvegardé avec succès dans '%s'.\n", version_num, save_dest);
+}
+
+int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t hash, size_t size, lookup_action_t action, const char *save_dest, int version_to_get) {
 
     if (size < 1024) {
         fprintf(stderr, "Erreur lookup_file: taille de table invalide\n");
@@ -332,7 +409,14 @@ int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t h
     size_t h_file_offset = 1 + sizeof(uint32_t) + name_len;
     uint32_t h_file_count = (addr[name_entry_block].longueur - h_file_offset) / sizeof(uint32_t);
 
-    printf("Fichier '%s' trouvé avec %d version(s):\n", filename, h_file_count);
+    bool action_print = (action == ACTION_PRINT);
+    bool action_save = (action == ACTION_SAVE);
+
+    if (action_print) {
+        fprintf(stderr, "Fichier '%s' trouvé avec %u version(s):\n", filename, h_file_count);
+    } else {
+        printf("Fichier '%s' trouvé avec %u version(s):\n", filename, h_file_count);
+    }
 
     // 4. Pour chaque h_file, afficher métadonnées
     for (uint32_t i = 0; i < h_file_count; i++) {
@@ -377,15 +461,35 @@ int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t h
         }
 
         // Afficher les métadonnées
-        printf("  Version %u:\n", i + 1);
-        printf("    Nom stocké: %s\n", file_name);
-        printf("    Taille: %zu octets\n", (size_t)metadata.size);
-        printf("    Modifié: %s\n", time_str);
-        printf("    Mode: 0%o\n", metadata.mode);
-        printf("    Hashcode: %u\n", h_file);
+        if (action_print) {
+            fprintf(stderr, "  Version %u:\n", i + 1);
+            fprintf(stderr, "    Nom stocké: %s\n", file_name);
+            fprintf(stderr, "    Taille: %zu octets\n", (size_t)metadata.size);
+            fprintf(stderr, "    Modifié: %s\n", time_str);
+            fprintf(stderr, "    Mode: 0%o\n", metadata.mode);
+            fprintf(stderr, "    Hashcode: %u\n", h_file);
+        } else {
+            printf("  Version %u:\n", i + 1);
+            printf("    Nom stocké: %s\n", file_name);
+            printf("    Taille: %zu octets\n", (size_t)metadata.size);
+            printf("    Modifié: %s\n", time_str);
+            printf("    Mode: 0%o\n", metadata.mode);
+            printf("    Hashcode: %u\n", h_file);
+        }
 
         sleep_nano(slowns);
         unlock_block(fd, h_file);
+
+        // Si c'est la version à récupérer, exécuter print/save
+        uint32_t target_idx = (version_to_get == -1) ? (h_file_count - 1) : (uint32_t)(version_to_get - 1);
+        if (i == target_idx && (action_print || action_save)) {
+            size_t content_offset = 1 + sizeof(struct file_metadata) + metadata.name_len;
+            if (action_print) {
+                print_file_content(fd, addr, h_file, b, metadata.size, content_offset, slowns);
+            } else if (action_save) {
+                save_file_content(fd, addr, h_file, b, metadata.size, content_offset, slowns, save_dest, metadata.mode, i + 1);
+            }
+        }
     }
 
     sleep_nano(slowns);

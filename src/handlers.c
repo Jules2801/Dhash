@@ -240,8 +240,23 @@ int handle_lookup(int argc, char **argv) {
     }
 
     struct stat sb = {0};
-    struct stat sb_target = {0};
-    bool is_file_target = (stat(argv[2], &sb_target) == 0 && S_ISREG(sb_target.st_mode));
+    if (fstat(fd, &sb) == -1) {
+        perror("fstat");
+        close(fd);
+        return 1;
+    }
+
+    char entry_type = detect_key_type(slowns, argv[2], fd, t_hash, sb.st_size);
+    bool is_file_target = false;
+    if (entry_type == 'n' || entry_type == 'f') {
+        is_file_target = true;
+    } else if (entry_type == 's') {
+        is_file_target = false;
+    } else {
+        fprintf(stderr, "Corruption détectée (type d'entrée inconnu)\n");
+        close(fd);
+        return 1;
+    }
 
     lookup_action_t action = ACTION_INFO;
     char save_dest[1024] = {0};

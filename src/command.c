@@ -167,6 +167,25 @@ int free_blocks(long slowns, int fd, size_t size,size_t *free_count, size_t *obj
 
 
 
+static uint32_t next_chain_entry(int fd, struct hache_entree *addr, uint32_t current, long slowns) {
+    while (addr[current].longueur > 1012) {
+        uint32_t cont = addr[current].suivant;
+        if (cont == 0xffffffffUL) {
+            return 0xffffffffUL;
+        }
+        lock_read_block(fd, cont);
+        sleep_nano(slowns);
+        unlock_block(fd, current);
+        current = cont;
+    }
+    uint32_t next = addr[current].suivant;
+    if (next != 0xffffffffUL) {
+        lock_read_block(fd, next);
+        sleep_nano(slowns);
+    }
+    unlock_block(fd, current);
+    return next;
+}
 
 //Pour les strings
 int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
@@ -219,36 +238,17 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
 
     // parcours de la chaine
     int found = 0;
-    while (1) {
+    while (current != 0xffffffffUL) {
         if (is_same_string(fd, addr, current, data_typed, slowns, data_typed_size)) {
             found = 1;
             sleep_nano(slowns);
             unlock_block(fd, current);
             break;
         }
-
-        // Aller au dernier bloc de l'objet courant si il est > 1012
-        while (addr[current].longueur > 1012) {
-            uint32_t cont = addr[current].suivant;
-            lock_read_block(fd, cont);
-            sleep_nano(slowns);
-            unlock_block(fd, current);
-            current = cont;
-        }
-
-        // pas d'objet suivant dans la chaîne ?
-        if (addr[current].suivant == 0xffffffffUL) {
-            sleep_nano(slowns);
-            unlock_block(fd, current);
-            break;
-        }
-        uint32_t next = addr[current].suivant;
-        lock_read_block(fd, next);
-        sleep_nano(slowns);
-        unlock_block(fd, current);
-        current = next;
+        current = next_chain_entry(fd, addr, current, slowns);
     }
 
+    free(data_typed);
     munmap(addr, size);
     return found ? 0 : 1;
 }
@@ -380,7 +380,7 @@ int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t h
 
     uint32_t name_entry_block = 0xffffffffUL;
 
-    while (1) {
+    while (current != 0xffffffffUL) {
         // Chercher le 'n' 
         if (addr[current].obj[0] == 'n' && 1 + sizeof(uint32_t) + name_len <= 1012) {
             uint32_t stored_name_len;
@@ -393,28 +393,12 @@ int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t h
             }
         }
 
-        // Aller au dernier bloc si longueur > 1012
-        while (addr[current].longueur > 1012) {
-            uint32_t cont = addr[current].suivant;
-            lock_read_block(fd, cont);
-            sleep_nano(slowns);
-            unlock_block(fd, current);
-            current = cont;
-        }
+        current = next_chain_entry(fd, addr, current, slowns);
+    }
 
-        // pas d'objet suivant dans la chaîne ?
-        if (addr[current].suivant == 0xffffffffUL) {
-            sleep_nano(slowns);
-            unlock_block(fd, current);
-            munmap(addr, size);
-            return 1;  // Non trouvé
-        }
-
-        uint32_t next = addr[current].suivant;
-        lock_read_block(fd, next);
-        sleep_nano(slowns);
-        unlock_block(fd, current);
-        current = next;
+    if (name_entry_block == 0xffffffffUL) {
+        munmap(addr, size);
+        return 1;
     }
 
     // 3. Lire la liste des hashes h_file
@@ -626,4 +610,88 @@ int deletehash(long slowns, uint32_t index, int fd, size_t size){
 
     munmap(addr, size);
     return deleted_count;
+}
+
+char detect_key_type(long slowns, const char *key, int fd, type_hash_t hash, size_t size) {
+    if (size < 1024) return '\0';
+    size_t b = size / 1024;
+    size_t key_len = strlen(key);
+
+    struct hache_entree *addr = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+    if (addr == MAP_FAILED) {
+        perror("mmap detect_key_type");
+        return '\0';
+    }
+
+    uint32_t index = apply_hash((unsigned char *)key, hash, b, key_len);
+    if (index == UINT32_MAX) {
+        munmap(addr, size);
+        return '\0';
+    }
+
+    lock_read_block(fd, index);
+    if (addr[index].longueur == 0xffffffffUL || addr[index].premier == 0xffffffffUL) {
+        sleep_nano(slowns);
+        unlock_block(fd, index);
+        munmap(addr, size);
+        return '\0';
+    }
+
+    uint32_t current = addr[index].premier;
+    if (current != index) {
+        lock_read_block(fd, current);
+        sleep_nano(slowns);
+        unlock_block(fd, index);
+    }
+
+    char result_type = '\0';
+    while (current != 0xffffffffUL) {
+        char first_byte = addr[current].obj[0];
+
+        if (first_byte == 's') {
+            size_t key_typed_size = key_len + 1;
+            char *key_typed = malloc(key_typed_size);
+            if (key_typed) {
+                key_typed[0] = 's';
+                memcpy(key_typed + 1, key, key_len);
+                int matches = is_same_string(fd, addr, current, key_typed, slowns, key_typed_size);
+                free(key_typed);
+                if (matches) {
+                    result_type = 's';
+                    break;
+                }
+            }
+        } else if (first_byte == 'n') {
+            if (addr[current].longueur >= 1 + sizeof(uint32_t)) {
+                uint32_t name_len;
+                memcpy(&name_len, addr[current].obj + 1, sizeof(uint32_t));
+                if (name_len == key_len && 1 + sizeof(uint32_t) + name_len <= 1012) {
+                    if (memcmp(addr[current].obj + 1 + sizeof(uint32_t), key, key_len) == 0) {
+                        result_type = 'n';
+                        break;
+                    }
+                }
+            }
+        } else if (first_byte == 'f') {
+            if (addr[current].longueur >= 1 + sizeof(struct file_metadata)) {
+                struct file_metadata metadata;
+                memcpy(&metadata, addr[current].obj + 1, sizeof(struct file_metadata));
+                if (metadata.name_len == key_len && 1 + sizeof(struct file_metadata) + key_len <= 1012) {
+                    if (memcmp(addr[current].obj + 1 + sizeof(struct file_metadata), key, key_len) == 0) {
+                        result_type = 'f';
+                        break;
+                    }
+                }
+            }
+        }
+
+        current = next_chain_entry(fd, addr, current, slowns);
+    }
+
+    if (current != 0xffffffffUL) {
+        sleep_nano(slowns);
+        unlock_block(fd, current);
+    }
+    munmap(addr, size);
+    return result_type;
 }

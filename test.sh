@@ -85,7 +85,7 @@ if diff "$SAMPLE_FILE" test_save.txt > /dev/null; then
 else
     echo -e "${RED}KO: le contenu du fichier ne correspond pas (save)${NC}"
 fi
-
+rm test_save.txt
 
 echo -e "\n${GREEN}=== Test 7: Suppression de chaîne avec delete ===${NC}"
 ./hachement insertstring "$TABLE_SHA" 0 "tata"

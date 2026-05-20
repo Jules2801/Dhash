@@ -500,7 +500,7 @@ int handle_delete(int argc, char **argv) {
     }
 
     long slowns = atol(argv[1]);
-    int fd = open(argv[0], O_RDONLY, 0644);
+    int fd = open(argv[0], O_RDWR, 0644);
     if (fd == -1) {
         perror_line("open");
         return 1;

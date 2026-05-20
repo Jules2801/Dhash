@@ -85,4 +85,25 @@ else
     echo -e "${RED}KO: le contenu du fichier ne correspond pas (save)${NC}"
 fi
 
+
+
+echo -e "\n${GREEN}=== Test 7: Suppression de chaîne avec delete ===${NC}"
+./hachement insertstring "$TABLE_SHA" 0 "tata"
+./hachement delete "$TABLE_SHA" 0 "tata"
+./hachement lookup "$TABLE_SHA" 0 "tata"
+if [ $? -ne 0 ]; then
+    echo "OK: 'tata' supprimé par delete"
+else
+    echo -e "${RED}KO: 'tata' toujours là après delete${NC}"
+fi
+
+echo -e "\n${GREEN}=== Test 8: Suppression de fichier avec delete ===${NC}"
+./hachement delete "$TABLE_FILE" 0 "$SAMPLE_FILE"
+echo "info" | ./hachement lookup "$TABLE_FILE" 0 "$SAMPLE_FILE"
+if [ $? -ne 0 ]; then
+    echo "OK: le fichier a bien été supprimé par delete"
+else
+    echo -e "${RED}KO: le fichier est toujours là après delete${NC}"
+fi
+
 echo -e "\n${GREEN}=== Fin des tests (.sha) ===${NC}"

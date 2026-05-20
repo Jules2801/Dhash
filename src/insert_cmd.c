@@ -425,13 +425,26 @@ int insertbuff_at(long slowns, char *data, int fd,size_t size, size_t data_size,
             current = next;
         }
     }
-
     //On ecrit la data 
     int rc = fill_data(fd, addr, data_size, data, start_block, slowns, b);
 
     munmap(addr, size);
     return rc;
 }
+
+
+char* string_format(char *data,size_t data_size){
+    size_t data_typed_size = data_size + 1;
+    char *data_typed = malloc(data_typed_size);
+    if (data_typed == NULL) {
+        perror("malloc data_typed");
+        return NULL;
+    }
+    data_typed[0] = 's';
+    memcpy(data_typed + 1, data, data_size);
+    return data_typed;
+}
+
 
 int insertstring(long slowns, char *data, int fd, type_hash_t hash, size_t size){
     size_t b = size / 1024;
@@ -442,24 +455,16 @@ int insertstring(long slowns, char *data, int fd, type_hash_t hash, size_t size)
         fprintf(stderr, "Erreur : fonction de hachage inconnue.\n");
         return 1;
     }
-    size_t data_typed_size = data_size + 1;
-    char *data_typed = malloc(data_typed_size);
-    if (data_typed == NULL) {
-        perror("malloc data_typed");
-        return 1;
-    }
-    data_typed[0] = 's';
-    memcpy(data_typed + 1, data, data_size);
-    int rc = insertbuff_at(slowns, data_typed, fd, size, data_typed_size, index, NULL);
+    char * data_typed = string_format(data, data_size);
+    int rc = insertbuff_at(slowns, data_typed, fd, size, data_size+1, index, NULL);
     free(data_typed);
-    
     return rc;
 }
 
 
 void* insertlines_worker(void* args){
     struct chunk_read * cr = (struct chunk_read*) args;
-
+    size_t b = cr->table_size / 1024;
     size_t start = cr->start;
     size_t pos = start;
     if(start!=0&&cr->file_addr[start-1]!='\n'){
@@ -479,13 +484,17 @@ void* insertlines_worker(void* args){
         size_t ligne_longueur = pos - ligne_debut;
         
         if (ligne_longueur > 0) {
-            insertbuff(cr->slowns, cr->file_addr + ligne_debut, cr->fd,
-                       cr->hash, cr->table_size, ligne_longueur, NULL, NULL);
+            uint32_t index = apply_hash((unsigned char *)(cr->file_addr + ligne_debut), cr->hash, b, ligne_longueur);
+            char* line_formated = string_format(cr->file_addr + ligne_debut, ligne_longueur);
+            if (line_formated != NULL) {
+                insertbuff_at(cr->slowns, line_formated, cr->fd, cr->table_size, ligne_longueur+1, index, NULL);
+                free(line_formated);
+            }
         }
-        
+
         pos++;  
     }
-    free(cr);
+
 
     return NULL;
     
@@ -539,6 +548,7 @@ int insertlines(long slowns,size_t nb_threads, int fd,int file_fd, type_hash_t h
         if(rc!=0){
             munmap(file_addr,file_size);
             destroy_block_mutexes();
+            free(cr);
             fprintf(stderr, "Erreur pthread : %s\n", strerror(rc));
             return 1;
         }
@@ -554,7 +564,7 @@ int insertlines(long slowns,size_t nb_threads, int fd,int file_fd, type_hash_t h
 
     munmap(file_addr, file_size);
     destroy_block_mutexes();
-
+    free(cr);
     return 0;
 
 }

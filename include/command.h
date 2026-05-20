@@ -52,6 +52,8 @@ int deletehash(long slowns, uint32_t index, int fd, size_t size);
 
 char detect_key_type(long slowns, const char *key, int fd, type_hash_t hash, size_t size);
 
+int delete_file(long slowns, char *filename, int fd, type_hash_t hash, size_t size);
+
 int check(long slowns, int fd, type_hash_t hash, size_t size);
 
 #endif

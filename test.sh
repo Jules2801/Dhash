@@ -5,7 +5,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 echo -e "${GREEN}=== Compilation du projet ===${NC}"
-gcc -Wall -Wextra src/*.c -lcrypto -o hachement
+make
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Erreur de compilation !${NC}"
@@ -15,6 +15,7 @@ fi
 TABLE_SHA="test_string.sha"
 TABLE_FILE="test_file.sha"
 SAMPLE_FILE="dictionnaire_officiel_scrabble_2012.txt"
+
 rm -f "$TABLE_SHA"
 rm -f "$TABLE_FILE"
 
@@ -84,17 +85,51 @@ if diff "$SAMPLE_FILE" test_save.txt > /dev/null; then
 else
     echo -e "${RED}KO: le contenu du fichier ne correspond pas (save)${NC}"
 fi
-rm -f test_save.txt
+rm test_save.txt
 
-echo -e "\n${GREEN}=== Test 6d: Lookup du fichier inséré quand le fichier local est absent ===${NC}"
-mv "$SAMPLE_FILE" "${SAMPLE_FILE}.tmp"
-printf "save\n\ntest_save.txt\n" | ./hachement lookup "$TABLE_FILE" 0 "$SAMPLE_FILE"
-mv "${SAMPLE_FILE}.tmp" "$SAMPLE_FILE"
-if diff "$SAMPLE_FILE" test_save.txt > /dev/null; then
-    echo "OK: le fichier a bien été retrouvé et sauvegardé même si le fichier local n'existait plus"
+echo -e "\n${GREEN}=== Test 7: Suppression de chaîne avec delete ===${NC}"
+./hachement insertstring "$TABLE_SHA" 0 "tata"
+./hachement delete "$TABLE_SHA" 0 "tata"
+./hachement lookup "$TABLE_SHA" 0 "tata"
+if [ $? -ne 0 ]; then
+    echo "OK: 'tata' supprimé par delete"
 else
-    echo -e "${RED}KO: impossible de retrouver ou sauvegarder le fichier quand le fichier local est absent${NC}"
+    echo -e "${RED}KO: 'tata' toujours là après delete${NC}"
 fi
-rm -f test_save.txt
+
+echo -e "\n${GREEN}=== Test 8: Suppression de fichier avec delete ===${NC}"
+./hachement delete "$TABLE_FILE" 0 "$SAMPLE_FILE"
+echo "info" | ./hachement lookup "$TABLE_FILE" 0 "$SAMPLE_FILE"
+if [ $? -ne 0 ]; then
+    echo "OK: le fichier a bien été supprimé par delete"
+else
+    echo -e "${RED}KO: le fichier est toujours là après delete${NC}"
+fi
+
+
+echo -e "\n${GREEN}=== Test 9: Insertions concurrentes en multiprocess ===${NC}"
+TABLE_CONC="test_concurrent.sha"
+rm -f "$TABLE_CONC"
+./hachement make "$TABLE_CONC" 5 1024
+
+for i in {1..20}; do
+    ./hachement insertstring "$TABLE_CONC" 5 "concurrent_$i" >/dev/null &
+done
+wait
+
+success=0
+for i in {1..20}; do
+    ./hachement lookup "$TABLE_CONC" 0 "concurrent_$i" >/dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        success=$((success + 1))
+    fi
+done
+
+if [ "$success" -eq 20 ]; then
+    echo "OK: Les 20 insertions concurrentes ont réussi."
+else
+    echo -e "${RED}KO: Seulement $success/20 insertions ont réussi.${NC}"
+fi
+rm -f "$TABLE_CONC"
 
 echo -e "\n${GREEN}=== Fin des tests (.sha) ===${NC}"

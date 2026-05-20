@@ -35,7 +35,7 @@ int main(int argc,char **argv){
         return handle_deletehash(argc-2, argv+2);
     }
     if (strcmp(argv[1], "delete") == 0) {
-        printf("free\n");
+        return handle_delete(argc-2, argv+2);
     }
     if (strcmp(argv[1], "check") == 0) {
         return handle_check(argc-2, argv+2);

@@ -254,7 +254,7 @@ int handle_lookup(int argc, char **argv) {
     } else if (entry_type == 's') {
         is_file_target = false;
     } else {
-        fprintf(stderr, "Corruption détectée (type d'entrée inconnu)\n");
+        fprintf(stderr, "Lookup : n'est pas dans la table\n");
         close(fd);
         return 1;
     }
@@ -489,8 +489,61 @@ int handle_insertlines(int argc, char **argv) {
     return rc;
 }
 
+int handle_delete(int argc, char **argv) {
+    if (argc < 3) {
+        fprintf(stderr, "il faut au moins 3 paramètres : <fichier_table> <slowns> <string/nom_fichier>\n");
+        return 1;
+    }
 
+    type_hash_t t_hash = check_extension(argv[0]);
+    if (t_hash == UINT32_MAX) {
+        return 1;
+    }
 
+    long slowns = atol(argv[1]);
+    int fd = open(argv[0], O_RDWR, 0644);
+    if (fd == -1) {
+        perror_line("open");
+        return 1;
+    }
+
+    struct stat sb = {0};
+    if (fstat(fd, &sb) == -1) {
+        perror("fstat");
+        close(fd);
+        return 1;
+    }
+
+    char entry_type = detect_key_type(slowns, argv[2], fd, t_hash, sb.st_size);
+    int rc = -1;
+    if (entry_type == 'n' || entry_type == 'f') {
+        rc = delete_file(slowns, argv[2], fd, t_hash, sb.st_size);
+        //printf("taille du fichier supprimé : %d\n", rc);
+    } else if (entry_type == 's') {
+        size_t b = sb.st_size / 1024;
+        uint32_t hashcode = apply_hash((unsigned char *)argv[2], t_hash, b, strlen(argv[2]));
+        if (hashcode == UINT32_MAX) {
+            fprintf(stderr, "Erreur de hachage.\n");
+            close(fd);
+            return 1;
+        }
+        rc = deletehash(slowns, hashcode, fd, sb.st_size);
+    } else {
+        fprintf(stderr, "Tentative de suppression d'une entrée non trouvée ou de type inconnu\n");
+        close(fd);
+        return 1;
+    } 
+
+    close(fd);
+    if (rc == -1) {
+        fprintf(stderr, "Erreur de la commande delete\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+ 
 int handle_check(int argc, char **argv) {
     if (argc < 2) {
         fprintf(stderr, "il faut au moins 2 paramètres : table slowns \n");
@@ -498,7 +551,7 @@ int handle_check(int argc, char **argv) {
     }
 
     type_hash_t hash;
-    if ((hash = check_extension(argv[0])) == -1) {
+    if ((hash = check_extension(argv[0])) == UINT32_MAX) {
         return 1;
     }
 

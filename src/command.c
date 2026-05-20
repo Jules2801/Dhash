@@ -225,6 +225,7 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
         sleep_nano(slowns);
         unlock_block(fd, index);
         munmap(addr, size);
+        free(data_typed);
         return 1;
     }
 
@@ -694,4 +695,9 @@ char detect_key_type(long slowns, const char *key, int fd, type_hash_t hash, siz
     }
     munmap(addr, size);
     return result_type;
+}
+
+int delete_file(long slowns, char *data, int fd, type_hash_t hash, size_t size){
+    (void)slowns; (void)data; (void)fd; (void)hash; (void)size;
+    return 0;
 }

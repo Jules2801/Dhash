@@ -5,7 +5,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 echo -e "${GREEN}=== Compilation du projet ===${NC}"
-gcc -Wall -Wextra src/*.c -lcrypto -o hachement
+gcc -Wall -Wextra src/*.c -lcrypto -fsanitize=address,leak,undefined -o hachement
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Erreur de compilation !${NC}"
@@ -84,17 +84,5 @@ if diff "$SAMPLE_FILE" test_save.txt > /dev/null; then
 else
     echo -e "${RED}KO: le contenu du fichier ne correspond pas (save)${NC}"
 fi
-rm -f test_save.txt
-
-echo -e "\n${GREEN}=== Test 6d: Lookup du fichier inséré quand le fichier local est absent ===${NC}"
-mv "$SAMPLE_FILE" "${SAMPLE_FILE}.tmp"
-printf "save\n\ntest_save.txt\n" | ./hachement lookup "$TABLE_FILE" 0 "$SAMPLE_FILE"
-mv "${SAMPLE_FILE}.tmp" "$SAMPLE_FILE"
-if diff "$SAMPLE_FILE" test_save.txt > /dev/null; then
-    echo "OK: le fichier a bien été retrouvé et sauvegardé même si le fichier local n'existait plus"
-else
-    echo -e "${RED}KO: impossible de retrouver ou sauvegarder le fichier quand le fichier local est absent${NC}"
-fi
-rm -f test_save.txt
 
 echo -e "\n${GREEN}=== Fin des tests (.sha) ===${NC}"

@@ -168,7 +168,7 @@ int free_blocks(long slowns, int fd, size_t size,size_t *free_count, size_t *obj
 
 
 
-
+//Pour les strings
 int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
     if (size < 1024) {
         fprintf(stderr, "Erreur lookup: taille de table invalide\n");
@@ -190,6 +190,12 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
         munmap(addr, size);
         return -1;
     }
+
+    //on ajoute le type s (pour verifier avec les string typé dans la table)
+    size_t data_typed_size = data_len+1;
+    char *data_typed = malloc(data_typed_size);
+    data_typed[0]='s';
+    memcpy(data_typed+1,data,data_len);
 
     // Lock pour pouvoir lire les champs
     lock_read_block(fd, index);
@@ -214,7 +220,7 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
     // parcours de la chaine
     int found = 0;
     while (1) {
-        if (is_same_string(fd, addr, current, data, slowns, data_len)) {
+        if (is_same_string(fd, addr, current, data_typed, slowns, data_typed_size)) {
             found = 1;
             sleep_nano(slowns);
             unlock_block(fd, current);
@@ -499,3 +505,119 @@ int lookup_file_by_name(long slowns, const char *filename, int fd, type_hash_t h
     return 0;
 }
 
+
+int deletehash(long slowns, uint32_t index, int fd, size_t size){
+    size_t b = size / 1024;
+    if (index >= b) {
+        fprintf(stderr, "Erreur deletehash: hashcode hors table\n");
+        return -1;
+    }
+
+    struct hache_entree *addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (addr == MAP_FAILED) {
+        perror("mmap dans deletehash");
+        return -1;
+    }
+
+    int deleted_count = 0;
+
+    lock_write_block(fd, index);
+
+    //si vide
+    if (addr[index].longueur == 0xffffffffUL) {
+        fprintf(stderr, "Warning : entrée vide.\n");
+        sleep_nano(slowns);
+        unlock_block(fd, index);
+        munmap(addr, size);
+        return 0;
+    }
+
+    uint32_t head = addr[index].premier;
+
+
+    //si pas de d'objet a ce hash
+    if (head == 0xffffffffUL) {
+        fprintf(stderr, "Warning : entrée vide.\n");
+        sleep_nano(slowns);
+        unlock_block(fd, index);
+        munmap(addr, size);
+        return 0;
+    }
+
+   
+    uint32_t current;
+
+    if (head==index) {
+        current = index;
+    } else {
+        lock_write_block(fd, head);
+        sleep_nano(slowns);
+        unlock_block(fd, index);
+        current = head;
+    }
+
+
+    while (current != 0xffffffffUL) {
+        uint32_t next = addr[current].suivant;
+
+        //on verrouille tout de suite le next
+        if (next != 0xffffffffUL) {
+            lock_write_block(fd, next);
+        }
+
+        bool moved = false;
+
+        //si un objet commencant par ce hash existe ailleur
+        if (addr[current].premier != 0xffffffffUL && addr[current].premier != current) {
+            uint32_t target = addr[current].premier;
+            lock_write_block(fd, target);
+
+            //si il ne fait que un block de taille 
+            if (addr[target].longueur != 0xffffffffUL &&addr[target].longueur <= 1012 && addr[target].suivant == 0xffffffffUL){
+                
+                
+                uint32_t target_len = addr[target].longueur;
+                // target -> current
+                memcpy(addr[current].obj, addr[target].obj, target_len);
+                addr[current].longueur = target_len;
+                addr[current].premier  = current;
+                addr[current].suivant  = 0xffffffffUL;
+                // on vide completement target
+                addr[target].longueur = 0xffffffffUL;
+                addr[target].premier  = target;
+                addr[target].suivant  = 0xffffffffUL;
+
+                sleep_nano(slowns);
+                unlock_block(fd, target);
+
+                moved = true;
+            } else {
+                sleep_nano(slowns);
+                unlock_block(fd, target);
+            }
+        }
+
+        if (!moved) {
+            addr[current].longueur = 0xffffffffUL;
+            addr[current].premier  = current;
+            addr[current].suivant  = 0xffffffffUL;
+        }
+
+        sleep_nano(slowns);
+        unlock_block(fd, current);
+
+        deleted_count++;
+        current = next;
+    }
+
+    // Nettoyage final
+    if (!(head==index)) {
+        lock_write_block(fd, index);
+        addr[index].premier = 0xffffffffUL;
+        sleep_nano(slowns);
+        unlock_block(fd, index);
+    }
+
+    munmap(addr, size);
+    return deleted_count;
+}

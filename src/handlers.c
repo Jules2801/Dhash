@@ -364,3 +364,47 @@ int handle_lookup(int argc, char **argv) {
     close(fd);
     return 1;
 }
+
+int handle_deletehash(int argc, char **argv) {
+    if (argc != 3) {
+        fprintf(stderr, "il faut 3 paramètres : table slowns hashcode\n");
+        return 1;
+    }
+
+    if (check_extension(argv[0]) == -1) {
+        return 1;
+    }
+
+    long slowns = atol(argv[1]);
+
+    // Le hashcode peut être en décimal ou en hexa (0x)
+    char *endptr;
+    uint32_t hashcode = (uint32_t)strtoul(argv[2], &endptr, 0);
+    if (*endptr != '\0') {
+        fprintf(stderr, "hashcode invalide : %s\n", argv[2]);
+        return 1;
+    }
+
+    int fd = open(argv[0], O_RDWR, 0644);
+    if (fd == -1) {
+        perror("open");
+        return 1;
+    }
+
+    struct stat sb = {0};
+    if (fstat(fd, &sb) == -1) {
+        perror("fstat");
+        close(fd);
+        return 1;
+    }
+
+    int rc = deletehash(slowns, hashcode, fd, sb.st_size);
+    close(fd);
+
+    if (rc == -1) {
+        fprintf(stderr, "Erreur de la commande deletehash\n");
+        return 1;
+    }
+
+    return 0;
+}

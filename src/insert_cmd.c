@@ -203,7 +203,6 @@ int insertfile(long slowns, int fd, int file_fd, char *filename,type_hash_t hash
             return 1;
         }
     }
-
    // construire le buff fichier
     struct file_metadata metadata = {
         .size     = (uint64_t)file_size,
@@ -231,7 +230,6 @@ int insertfile(long slowns, int fd, int file_fd, char *filename,type_hash_t hash
     }
 
     if (file_addr) munmap(file_addr, file_size);
-
     // On insert le fichier 
     uint32_t h_file;
     bool w = false;
@@ -434,5 +432,16 @@ int insertbuff_at(long slowns, char *data, int fd,size_t size, size_t data_size,
 }
 
 int insertstring(long slowns, char *data, int fd, type_hash_t hash, size_t size){
-    return insertbuff(slowns,data,fd,hash,size, strlen(data),NULL,NULL);
+    size_t b = size / 1024;
+    size_t data_size = strlen(data);
+    uint32_t index = apply_hash((unsigned char *)data, hash, b,data_size);
+    if (index == UINT32_MAX) {
+        fprintf(stderr, "Erreur : fonction de hachage inconnue.\n");
+        return 1;
+    }
+    size_t data_typed_size = data_size+1;
+    char *data_typed = malloc(data_typed_size);
+    data_typed[0]='s';
+    memcpy(data_typed+1,data,data_size);
+    return insertbuff_at(slowns, data_typed, fd, size, data_typed_size, index,NULL);
 }

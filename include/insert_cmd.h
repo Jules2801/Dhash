@@ -16,6 +16,17 @@ struct file_metadata {
     uint32_t name_len;   // taille du nom
 };
 
+struct chunk_read {
+    char *file_addr;       
+    size_t file_size;      
+    size_t start;          
+    size_t end;            
+    int fd;               
+    type_hash_t hash;
+    size_t table_size;
+    long slowns;
+};
+
 /**
  * @brief Écrit data dans la chaîne de blocs commençant à start_block
  *
@@ -47,6 +58,8 @@ int fill_data(int fd, struct hache_entree *addr, size_t data_size,
 int insertstring(long slowns, char *data, int fd, type_hash_t hash, size_t size);
 
 int insertfile(long slowns,int fd,int file_fd,char* file_name,type_hash_t hash, size_t sizes,struct stat* sb_file);
+
+int insertlines(long slowns,size_t nb_threads, int fd,int file_fd, type_hash_t hash, size_t size, struct stat* sb_file);
 
 
 #endif

@@ -253,7 +253,11 @@ int lookup(long slowns, char *data, int fd, type_hash_t hash, size_t size) {
     return found ? 0 : 1;
 }
 
-static void print_file_content(int fd, struct hache_entree *addr, uint32_t h_file, size_t b, size_t size_content, size_t content_offset, long slowns) {
+static int 
+extract_file_content(int fd, struct hache_entree *addr, uint32_t h_file, size_t b,
+    size_t size_content, size_t content_offset, long slowns, 
+    void (*handler)(void *user_data, char *buf, size_t size, size_t offset), void *user_data) {
+
     uint32_t curr = h_file;
     size_t written = 0;
     // Parcours des blocs de données du fichier
@@ -265,7 +269,7 @@ static void print_file_content(int fd, struct hache_entree *addr, uint32_t h_fil
             sleep_nano(slowns);
             unlock_block(fd, curr);
             fprintf(stderr, "Erreur: bloc de continuation libre\n");
-            break;
+            return -1;
         }
         // Espace disponible dans le bloc courant (1012 octets max pour les continuations, diminué de l'offset de l'en-tête pour le premier bloc)
         size_t chunk_avail = (written == 0) ? (1012 - content_offset) : 1012;
@@ -273,8 +277,10 @@ static void print_file_content(int fd, struct hache_entree *addr, uint32_t h_fil
         char *chunk_ptr = (written == 0) ? (addr[curr].obj + content_offset) : addr[curr].obj;
         // Nombre d'octets à écrire (le reste des données s'il est plus petit que l'espace disponible, sinon tout l'espace disponible)
         size_t to_write = (size_content - written < chunk_avail) ? (size_content - written) : chunk_avail;
-        // Écriture du fragment sur la sortie standard (STDOUT)
-        write(STDOUT_FILENO, chunk_ptr, to_write);
+
+        // lance la fonction donnée en paramètre 
+        handler(user_data, chunk_ptr, to_write, written);
+
         written += to_write;
         uint32_t next = addr[curr].suivant;
         sleep_nano(slowns);
@@ -283,11 +289,28 @@ static void print_file_content(int fd, struct hache_entree *addr, uint32_t h_fil
         if (written < size_content) {
             if (next == 0xffffffffUL || next >= b) {
                 fprintf(stderr, "Erreur: bloc de continuation invalide ou fin prématurée\n");
-                break;
+                return -1;
             }
             curr = next;
         }
     }
+    return 0;
+}
+
+static void print_chunk_callback(void *user_data, char *buf, size_t size, size_t offset) {
+    (void)user_data; // pour éviter les warnings avec -Wall
+    (void)offset;
+    write(STDOUT_FILENO, buf, size);
+}
+
+static void print_file_content(int fd, struct hache_entree *addr, uint32_t h_file, size_t b, size_t size_content, size_t content_offset, long slowns) {
+    extract_file_content(fd, addr, h_file, b, size_content, content_offset, slowns, print_chunk_callback, NULL);
+    fflush(stdout);
+}
+
+static void save_chunk_callback(void *user_data, char *buf, size_t size, size_t offset) {
+    char *out_addr = (char *)user_data;
+    memcpy(out_addr + offset, buf, size);
 }
 
 static void save_file_content(int fd, struct hache_entree *addr, uint32_t h_file, size_t b, size_t size_content, size_t content_offset, long slowns, const char *save_dest, mode_t mode, uint32_t version_num) {
@@ -304,40 +327,7 @@ static void save_file_content(int fd, struct hache_entree *addr, uint32_t h_file
             if (out_addr == MAP_FAILED) {
                 perror("mmap save destination");
             } else {
-                uint32_t curr = h_file;
-                size_t written = 0;
-                // parcours des blocs pour copier
-                while (written < size_content) {
-                    // Lock du contenu courant
-                    lock_read_block(fd, curr);
-                    // Vérification si le bloc est libre
-                    if (addr[curr].longueur == 0xffffffffUL) {
-                        sleep_nano(slowns);
-                        unlock_block(fd, curr);
-                        fprintf(stderr, "Erreur: bloc de continuation libre\n");
-                        break;
-                    }
-                    // Espace disponible dans le bloc courant (1012 octets max pour les continuations, diminué de l'offset de l'en-tête pour le premier bloc)
-                    size_t chunk_avail = (written == 0) ? (1012 - content_offset) : 1012;
-                    // Pointeur vers le début des données utiles du bloc courant (après l'en-tête pour le premier bloc, ou au début de obj sinon)
-                    char *chunk_ptr = (written == 0) ? (addr[curr].obj + content_offset) : addr[curr].obj;
-                    // Nombre d'octets à écrire (le reste des données s'il est plus petit que l'espace disponible, sinon tout l'espace disponible)
-                    size_t to_write = (size_content - written < chunk_avail) ? (size_content - written) : chunk_avail;
-                    // écriture du bloc dans le fichier de destination
-                    memcpy(out_addr + written, chunk_ptr, to_write);
-                    written += to_write;
-                    uint32_t next = addr[curr].suivant;
-                    sleep_nano(slowns);
-                    unlock_block(fd, curr);
-                    // bloc suivant si nécessaire
-                    if (written < size_content) {
-                        if (next == 0xffffffffUL || next >= b) {
-                            fprintf(stderr, "Erreur: bloc de continuation invalide ou fin prématurée\n");
-                            break;
-                        }
-                        curr = next;
-                    }
-                }
+                extract_file_content(fd, addr, h_file, b, size_content, content_offset, slowns, save_chunk_callback, out_addr);
                 munmap(out_addr, size_content);
             }
         }

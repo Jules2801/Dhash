@@ -16,20 +16,8 @@
 #include "../include/utils.h"
 #include "../include/insert_cmd.h"
 
-int insertbuff(long slowns, char *data, int fd, type_hash_t hash, size_t size, size_t data_size, uint32_t *out_hash,bool* w);
-
-int insertbuff_at(long slowns, char *data, int fd, size_t size, size_t data_size, uint32_t index,bool* w);
 
 
-
-
-/**
- * @brief Cherche une entrée nom existante pour 'filename' dans la chaîne à h_name.
- *
- * @return 1 si trouvée (*last_block = dernier bloc, locké en write),
- *         0 si pas trouvée (rien locké),
- *        -1 si erreur (rien locké).
- */
 int find_name_entry(int fd, struct hache_entree *addr, uint32_t h_name, const char *filename, size_t name_len,long slowns, uint32_t *last_block){
     lock_write_block(fd, h_name);
 

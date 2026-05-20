@@ -61,5 +61,6 @@ int insertfile(long slowns,int fd,int file_fd,char* file_name,type_hash_t hash, 
 
 int insertlines(long slowns,size_t nb_threads, int fd,int file_fd, type_hash_t hash, size_t size, struct stat* sb_file);
 
+int insertbuff_at(long slowns, char *data, int fd, size_t size, size_t data_size, uint32_t index,bool* w);
 
 #endif

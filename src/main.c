@@ -13,10 +13,9 @@
 
 int main(int argc,char **argv){
     if (argc == 1) {
-        fprintf(stderr, "il faut une commande\n");
+        fprintf(stderr, "Il faut une commande\n");
         return 1;
     }
-    
     if (strcmp(argv[1], "make") == 0) {
         return handle_make(argc-2, argv+2);
     }
@@ -42,20 +41,18 @@ int main(int argc,char **argv){
         return handle_check(argc-2, argv+2);
     }
     if (strcmp(argv[1], "extend") == 0) {
-        printf("free\n");
+        return handle_extend(argc-2, argv+2);
     }    
     if (strcmp(argv[1], "shrink") == 0) {
-        printf("free\n");
+        return handle_shrink(argc-2, argv+2);
     }    
     if (strcmp(argv[1], "ajust") == 0) {
-        printf("free\n");
+        return handle_ajust(argc-2, argv+2);
     }  
     if (strcmp(argv[1], "insertlines") == 0) {
         return handle_insertlines(argc-2, argv+2);
     }
-
-
-   fprintf(stderr, "commande inconnue\n");
+   fprintf(stderr, "Commande inconnue\n");
    return 1;
 
 }

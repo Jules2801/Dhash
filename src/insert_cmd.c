@@ -145,8 +145,7 @@ int reserve_free_block(int fd, struct hache_entree *addr, size_t b, uint32_t hin
 
 
 
-int fill_data
-(int fd, struct hache_entree *addr, size_t data_size, char *data, uint32_t start_block, long slowns, size_t b) {
+int fill_data(int fd, struct hache_entree *addr, size_t data_size, char *data, uint32_t start_block, long slowns, size_t b) {
     size_t remaining = data_size;
     size_t cursor    = 0;
     uint32_t current = start_block;
@@ -196,6 +195,7 @@ int fill_data
 int insertfile(long slowns, int fd, int file_fd, char *filename,type_hash_t hash, size_t size, struct stat *sb_file){
     size_t file_size = sb_file->st_size;
     size_t name_len = strlen(filename);
+    size_t b = size/1024;
 
     void *file_addr = NULL;
     if (file_size > 0) {
@@ -233,9 +233,11 @@ int insertfile(long slowns, int fd, int file_fd, char *filename,type_hash_t hash
 
     if (file_addr) munmap(file_addr, file_size);
     // On insert le fichier 
-    uint32_t h_file;
+    
+    uint32_t h_file = apply_hash((unsigned char *)(buff + 1), hash, b, buff_size - 1);
     bool w = false;
-    int rc = insertbuff(slowns, buff, fd, hash, size, buff_size, &h_file,&w);
+    //insertbuff_at(slowns, name_blob, fd, size, name_blob_size, h_name,NULL);
+    int rc = insertbuff_at(slowns, buff, fd, size, buff_size, h_file, &w);
     free(buff);
     if (rc != 0) return rc;
 
@@ -243,8 +245,6 @@ int insertfile(long slowns, int fd, int file_fd, char *filename,type_hash_t hash
         return 0;
     }
 
-    // Hasher juste le nom du fichier
-    size_t b = size / 1024;
     uint32_t h_name = apply_hash((unsigned char*)filename, hash, b, name_len);
     if (h_name == UINT32_MAX) {
         fprintf(stderr, "Erreur : fonction de hachage inconnue.\n");
@@ -433,14 +433,17 @@ int insertbuff_at(long slowns, char *data, int fd,size_t size, size_t data_size,
 }
 
 
-char* string_format(char *data,size_t data_size){
+char* type_format(char *data,size_t data_size,char type){
+    if(type!='f'&&type!='n'&&type!='s'){
+        return  NULL;
+    }
     size_t data_typed_size = data_size + 1;
     char *data_typed = malloc(data_typed_size);
     if (data_typed == NULL) {
         perror("malloc data_typed");
         return NULL;
     }
-    data_typed[0] = 's';
+    data_typed[0] = type;
     memcpy(data_typed + 1, data, data_size);
     return data_typed;
 }
@@ -455,7 +458,7 @@ int insertstring(long slowns, char *data, int fd, type_hash_t hash, size_t size)
         fprintf(stderr, "Erreur : fonction de hachage inconnue.\n");
         return 1;
     }
-    char * data_typed = string_format(data, data_size);
+    char * data_typed = type_format(data, data_size,'s');
     int rc = insertbuff_at(slowns, data_typed, fd, size, data_size+1, index, NULL);
     free(data_typed);
     return rc;
@@ -485,7 +488,7 @@ void* insertlines_worker(void* args){
         
         if (ligne_longueur > 0) {
             uint32_t index = apply_hash((unsigned char *)(cr->file_addr + ligne_debut), cr->hash, b, ligne_longueur);
-            char* line_formated = string_format(cr->file_addr + ligne_debut, ligne_longueur);
+            char* line_formated = type_format(cr->file_addr + ligne_debut, ligne_longueur,'s');
             if (line_formated != NULL) {
                 insertbuff_at(cr->slowns, line_formated, cr->fd, cr->table_size, ligne_longueur+1, index, NULL);
                 free(line_formated);

@@ -69,3 +69,44 @@ uint32_t apply_hash(unsigned char *data,type_hash_t hash,uint32_t b,size_t data_
         }
     }
 } 
+
+
+bool try_hash_as_name(char *buf, uint32_t declared_len, size_t caped_len,type_hash_t hash, size_t b, uint32_t *out_hash) {
+    
+    size_t header = 1 + sizeof(uint32_t);
+    if (declared_len < header || caped_len < header || buf[0] != 'n') return false;
+
+    uint32_t name_len;
+    memcpy(&name_len, buf + 1, sizeof(uint32_t));
+
+    if ((size_t)name_len > caped_len - header) return false;
+    if (header + (size_t)name_len > declared_len) return false;
+    size_t rest = declared_len - header - name_len;
+    if (rest < sizeof(uint32_t) || rest % sizeof(uint32_t) != 0) return false;
+
+    *out_hash = apply_hash((unsigned char *)(buf + header), hash, b, name_len);
+    return true;
+}
+
+
+uint32_t hash_as_content(const char *buf, uint32_t declared_len, size_t caped_len,type_hash_t hash, size_t b) {
+    // marqueur (1 octet) + contenu
+    if (declared_len < 1 || caped_len < 1) {
+        return UINT32_MAX;
+    }
+    // On hashe à partir de buf+1 (après le type)
+    // borné par ce qu'on a réellement lu (caped_len-1)
+    size_t hlen = declared_len - 1;
+    size_t safe = caped_len - 1;
+    if (hlen > safe) hlen = safe;
+    return apply_hash((unsigned char *)(buf + 1), hash, b, hlen);
+}
+
+
+uint32_t recompute_hash(char *buf, uint32_t declared_len, size_t caped_len,type_hash_t hash, size_t b) {
+    uint32_t h;
+    if (try_hash_as_name(buf, declared_len, caped_len, hash, b, &h)) {
+        return h;
+    }
+    return hash_as_content(buf, declared_len, caped_len, hash, b);
+}

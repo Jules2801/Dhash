@@ -436,16 +436,24 @@ int insertbuff_at(long slowns, char *data, int fd,size_t size, size_t data_size,
 int insertstring(long slowns, char *data, int fd, type_hash_t hash, size_t size){
     size_t b = size / 1024;
     size_t data_size = strlen(data);
-    uint32_t index = apply_hash((unsigned char *)data, hash, b,data_size);
+    uint32_t index = apply_hash((unsigned char *)data, hash, b, data_size);
+    
     if (index == UINT32_MAX) {
         fprintf(stderr, "Erreur : fonction de hachage inconnue.\n");
         return 1;
     }
-    size_t data_typed_size = data_size+1;
+    size_t data_typed_size = data_size + 1;
     char *data_typed = malloc(data_typed_size);
-    data_typed[0]='s';
-    memcpy(data_typed+1,data,data_size);
-    return insertbuff_at(slowns, data_typed, fd, size, data_typed_size, index,NULL);
+    if (data_typed == NULL) {
+        perror("malloc data_typed");
+        return 1;
+    }
+    data_typed[0] = 's';
+    memcpy(data_typed + 1, data, data_size);
+    int rc = insertbuff_at(slowns, data_typed, fd, size, data_typed_size, index, NULL);
+    free(data_typed);
+    
+    return rc;
 }
 
 

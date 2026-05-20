@@ -517,7 +517,6 @@ int handle_delete(int argc, char **argv) {
     int rc = -1;
     if (entry_type == 'n' || entry_type == 'f') {
         rc = delete_file(slowns, argv[2], fd, t_hash, sb.st_size);
-        //printf("taille du fichier supprimé : %d\n", rc);
     } else if (entry_type == 's') {
         size_t b = sb.st_size / 1024;
         uint32_t hashcode = apply_hash((unsigned char *)argv[2], t_hash, b, strlen(argv[2]));

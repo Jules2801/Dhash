@@ -48,5 +48,7 @@ int insertstring(long slowns, char *data, int fd, type_hash_t hash, size_t size)
 
 int insertfile(long slowns,int fd,int file_fd,char* file_name,type_hash_t hash, size_t sizes,struct stat* sb_file);
 
+int insertlines(long slowns,size_t nb_threads, int fd,int file_fd, type_hash_t hash, size_t size, struct stat* sb_file);
+
 
 #endif

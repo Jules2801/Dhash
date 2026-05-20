@@ -36,6 +36,11 @@ int lock_read_block(int fd, uint32_t block_index);
  */
 int unlock_block(int fd, uint32_t block_index);
 
+
+void destroy_block_mutexes();
+
+int init_block_mutexes(size_t num_blocks);
+
 bool sleep_nano(long slowns);
 
 

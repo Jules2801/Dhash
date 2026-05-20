@@ -39,7 +39,7 @@ int main(int argc,char **argv){
         printf("free\n");
     }
     if (strcmp(argv[1], "check") == 0) {
-        printf("free\n");
+        return handle_check(argc-2, argv+2);
     }
     if (strcmp(argv[1], "extend") == 0) {
         printf("free\n");

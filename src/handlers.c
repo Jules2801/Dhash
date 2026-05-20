@@ -15,6 +15,9 @@
 #include "../include/file.h"
 #include "../include/insert_cmd.h"
 
+#define perror_line(msg) \
+    fprintf(stderr, "%s:%d %s: %s\n", __FILE__, __LINE__, msg, strerror(errno))
+
 
 int print_file_stats(int fd, const char *filename,struct stat* sb) {
     struct stat local_sb;
@@ -217,9 +220,6 @@ int handle_free(int argc, char **argv) {
     close(fd);
     return 0;
 }
-
-#define perror_line(msg) \
-    fprintf(stderr, "%s:%d %s: %s\n", __FILE__, __LINE__, msg, strerror(errno))
 
 int handle_lookup(int argc, char **argv) {
     if (argc < 3) {
@@ -486,4 +486,40 @@ int handle_insertlines(int argc, char **argv) {
     close(fd);
 
     return rc;
+}
+
+int handle_check(int argc, char **argv) {
+    if (argc < 2) {
+        fprintf(stderr, "il faut au moins 2 paramètres : table slowns \n");
+        return 1;
+    }
+
+    type_hash_t hash;
+    if ((hash = check_extension(argv[0])) == -1) {
+        return 1;
+    }
+
+    long slowns = atol(argv[1]);
+
+    int fd = open(argv[0], O_RDWR, 0644);
+    if (fd == -1) {
+        perror("open table");
+        return 1;
+    }
+
+    struct stat sb = {0};
+    if (fstat(fd, &sb) == -1) {
+        perror("fstat table");
+        close(fd);
+        return 1;
+    }
+    int corruptions = check(slowns,fd, hash, sb.st_size);
+    if (corruptions == 0) {
+        printf("Table cohérente : aucune incohérence détectée.\n");
+    } else {
+        printf("%d incohérence(s) détectée(s).\n", corruptions);
+    }
+    close(fd);
+
+    return 0;
 }

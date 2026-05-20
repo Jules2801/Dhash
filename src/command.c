@@ -695,3 +695,165 @@ char detect_key_type(long slowns, const char *key, int fd, type_hash_t hash, siz
     munmap(addr, size);
     return result_type;
 }
+
+static int read_object(int fd, struct hache_entree *addr, uint32_t start, size_t b,long slowns, char *buffer, size_t buf_cap,uint32_t *out_total, uint32_t *out_next) {
+    
+    //l'index est en dehors
+    if (start >= b) return -1;
+
+
+    lock_read_block(fd, start);
+    uint32_t total = addr[start].longueur;
+    sleep_nano(slowns);
+    unlock_block(fd, start);
+
+    if (total == 0xffffffffUL) return -1;       // bloc libre, pas un objet
+    if ((size_t)total > b * 1012) return -1;    // longueur trop grande 
+
+    size_t remaining = total;
+    size_t copied = 0;
+    uint32_t current = start;
+    size_t steps = 0;
+    uint32_t last_suivant = 0xffffffffUL;
+
+    // Cas objet vide (longueur 0)
+    if (total == 0) {
+        lock_read_block(fd, start);
+        last_suivant = addr[start].suivant;
+        sleep_nano(slowns);
+        unlock_block(fd, start);
+        *out_total = 0;
+        *out_next = last_suivant;
+        return 0;
+    }
+
+    while (remaining > 0) {
+        if (current >= b) return -1;            // pointeur hors table
+        if (steps > b) return -1;               // cycle / chaine trop longue
+
+        lock_read_block(fd, current);
+        uint32_t suiv = addr[current].suivant;
+        size_t chunk = (remaining < 1012) ? remaining : 1012;
+        size_t to_copy = (copied + chunk <= buf_cap) ? chunk : (buf_cap - copied);
+        if (to_copy > 0) memcpy(buffer + copied, addr[current].obj, to_copy);
+        sleep_nano(slowns);
+        unlock_block(fd, current);
+
+        copied += to_copy;
+        remaining -= chunk;
+        last_suivant = suiv;
+
+        if (remaining > 0) {
+            if (suiv == 0xffffffffUL) return -1;  // longueur continue mais pas de suivant
+            current = suiv;
+        }
+        steps++;
+    }
+
+    *out_total = total;
+    *out_next = last_suivant;
+    return 0;
+}
+
+int check(long slowns, int fd, type_hash_t hash, size_t size) {
+    size_t b = size / 1024;
+
+    struct hache_entree *addr = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+    if (addr == MAP_FAILED) {
+        perror("mmap dans check");
+        return -1;
+    }
+
+    int corruptions = 0;
+
+    // Parcourir chaque case de la table 
+    for (size_t i = 0; i < b; i++) {
+        lock_read_block(fd, i);
+        uint32_t longueur = addr[i].longueur;
+        uint32_t premier  = addr[i].premier;
+        sleep_nano(slowns);
+        unlock_block(fd, i);
+
+        // Case libre ou pas de chaîne pour ce hash
+        if (longueur == 0xffffffffUL) continue;
+        if (premier == 0xffffffffUL) continue;
+
+        // si Pointeur premier corrompu 
+        if (premier >= b) {
+            printf("CORRUPTION bloc %zu : premier hors table (%u)\n", i, premier);
+            corruptions++;
+            continue;
+        }
+
+        // on parcours la chaîne du hash i, objet par objet
+        uint32_t current = premier;
+        size_t obj_count = 0;
+
+        while (current != 0xffffffffUL) {
+            //pointeur hors table
+            if (current >= b) {
+                printf("CORRUPTION chaîne %zu : pointeur hors table (%u)\n", i, current);
+                corruptions++;
+                break;
+            }
+            //cycle ou chaîne trop longue
+            if (obj_count > b) {
+                printf("CORRUPTION chaîne %zu : cycle suspecté\n", i);
+                corruptions++;
+                break;
+            }
+
+            //lire la longueur déclaree de l'objet courant
+            lock_read_block(fd, current);
+            uint32_t declared = addr[current].longueur;
+            sleep_nano(slowns);
+            unlock_block(fd, current);
+
+            //bloc libre au milieu d'une chaîne = corruption
+            if (declared == 0xffffffffUL) {
+                printf("CORRUPTION chaîne %zu : bloc %u libre dans une chaîne\n", i, current);
+                corruptions++;
+                break;
+            }
+
+            // Allouer un buffer borné pour lire le contenu de l'objet
+            size_t cap = (size_t)declared;
+            if (cap > size) cap = size;       // borne 
+            char *buf = malloc(cap > 0 ? cap : 1);
+            if (buf == NULL) {
+                perror("malloc dans check");
+                munmap(addr, size);
+                return -1;
+            }
+
+            // Extraire le contenu de l'objet (défensif)
+            uint32_t real_declared, next;
+            if (read_object(fd, addr, current, b, slowns, buf, cap, &real_declared, &next) != 0){
+                printf("CORRUPTION chaîne %zu : objet au bloc %u illisible\n", i, current);
+                corruptions++;
+                free(buf);
+                break;
+            }
+
+            // recalculer le hash et comparer 
+            uint32_t h_recalc = recompute_hash(buf, real_declared, cap, hash, b);
+
+            if (h_recalc == UINT32_MAX) {
+                printf("CORRUPTION chaîne %zu : hash non calculable au bloc %u\n", i, current);
+                corruptions++;
+            } else if (h_recalc != (uint32_t)i) {
+                printf("CORRUPTION : objet bloc %u dans chaîne %zu mais hash recalculé = %u\n",
+                       current, i, h_recalc);
+                corruptions++;
+            }
+
+            free(buf);
+            current = next;
+            obj_count++;
+        }
+    }
+
+    munmap(addr, size);
+
+    return corruptions;
+}

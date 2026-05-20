@@ -423,3 +423,67 @@ int handle_deletehash(int argc, char **argv) {
 
     return 0;
 }
+
+int handle_insertlines(int argc, char **argv) {
+    if (argc < 3) {
+        fprintf(stderr, "il faut au moins 3 paramètres : table slowns fichier [-t N]\n");
+        return 1;
+    }
+
+    if (check_extension(argv[0]) == -1) {
+        return 1;
+    }
+
+    long slowns = atol(argv[1]);
+    char *filename = argv[2];
+
+    //par defaut on met le nbr de thread = max du cpu
+    size_t nb_threads = (size_t)sysconf(_SC_NPROCESSORS_ONLN);
+    if (nb_threads < 1) nb_threads = 4;
+
+    for (int i = 3; i < argc - 1; i++) {
+        if (strcmp(argv[i], "-t") == 0) {
+            long t = atol(argv[i + 1]);
+            if (t >= 1) {
+                nb_threads = (size_t)t;
+            }
+            i++;
+        }
+    }
+
+
+    int fd = open(argv[0], O_RDWR, 0644);
+    if (fd == -1) {
+        perror("open table");
+        return 1;
+    }
+
+    struct stat sb = {0};
+    if (fstat(fd, &sb) == -1) {
+        perror("fstat table");
+        close(fd);
+        return 1;
+    }
+
+    
+    int file_fd = open(filename, O_RDONLY);
+    if (file_fd == -1) {
+        perror("open fichier texte");
+        close(fd);
+        return 1;
+    }
+
+    struct stat sb_file = {0};
+    if (fstat(file_fd, &sb_file) == -1) {
+        perror("fstat fichier texte");
+        close(file_fd);
+        close(fd);
+        return 1;
+    }
+    int rc = insertlines(slowns, nb_threads, fd, file_fd,check_extension(argv[0]), sb.st_size, &sb_file);
+
+    close(file_fd);
+    close(fd);
+
+    return rc;
+}

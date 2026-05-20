@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -10,7 +11,6 @@
 
 #include "../include/hash.h"
 #include "../include/command.h"
-#include "../include/file.h"
 #include "../include/lock.h"
 #include "../include/type.h"
 #include "../include/utils.h"
@@ -19,6 +19,8 @@
 int insertbuff(long slowns, char *data, int fd, type_hash_t hash, size_t size, size_t data_size, uint32_t *out_hash,bool* w);
 
 int insertbuff_at(long slowns, char *data, int fd, size_t size, size_t data_size, uint32_t index,bool* w);
+
+
 
 
 /**
@@ -423,7 +425,6 @@ int insertbuff_at(long slowns, char *data, int fd,size_t size, size_t data_size,
             current = next;
         }
     }
-
     //On ecrit la data 
     int rc = fill_data(fd, addr, data_size, data, start_block, slowns, b);
 
@@ -431,17 +432,139 @@ int insertbuff_at(long slowns, char *data, int fd,size_t size, size_t data_size,
     return rc;
 }
 
+
+char* string_format(char *data,size_t data_size){
+    size_t data_typed_size = data_size + 1;
+    char *data_typed = malloc(data_typed_size);
+    if (data_typed == NULL) {
+        perror("malloc data_typed");
+        return NULL;
+    }
+    data_typed[0] = 's';
+    memcpy(data_typed + 1, data, data_size);
+    return data_typed;
+}
+
+
 int insertstring(long slowns, char *data, int fd, type_hash_t hash, size_t size){
     size_t b = size / 1024;
     size_t data_size = strlen(data);
-    uint32_t index = apply_hash((unsigned char *)data, hash, b,data_size);
+    uint32_t index = apply_hash((unsigned char *)data, hash, b, data_size);
+    
     if (index == UINT32_MAX) {
         fprintf(stderr, "Erreur : fonction de hachage inconnue.\n");
         return 1;
     }
-    size_t data_typed_size = data_size+1;
-    char *data_typed = malloc(data_typed_size);
-    data_typed[0]='s';
-    memcpy(data_typed+1,data,data_size);
-    return insertbuff_at(slowns, data_typed, fd, size, data_typed_size, index,NULL);
+    char * data_typed = string_format(data, data_size);
+    int rc = insertbuff_at(slowns, data_typed, fd, size, data_size+1, index, NULL);
+    free(data_typed);
+    return rc;
+}
+
+
+void* insertlines_worker(void* args){
+    struct chunk_read * cr = (struct chunk_read*) args;
+    size_t b = cr->table_size / 1024;
+    size_t start = cr->start;
+    size_t pos = start;
+    if(start!=0&&cr->file_addr[start-1]!='\n'){
+        while (pos < cr->file_size && cr->file_addr[pos] != '\n') {
+            pos++;
+        }
+        pos++;  
+    }
+    
+    while (pos < cr->end && pos < cr->file_size) {
+        size_t ligne_debut = pos;
+        //on avance jusqu'a la fin de la ligne
+        while (pos < cr->file_size && cr->file_addr[pos] != '\n') {
+            pos++;
+        }
+        
+        size_t ligne_longueur = pos - ligne_debut;
+        
+        if (ligne_longueur > 0) {
+            uint32_t index = apply_hash((unsigned char *)(cr->file_addr + ligne_debut), cr->hash, b, ligne_longueur);
+            char* line_formated = string_format(cr->file_addr + ligne_debut, ligne_longueur);
+            if (line_formated != NULL) {
+                insertbuff_at(cr->slowns, line_formated, cr->fd, cr->table_size, ligne_longueur+1, index, NULL);
+                free(line_formated);
+            }
+        }
+
+        pos++;  
+    }
+
+
+    return NULL;
+    
+}
+
+
+int insertlines(long slowns,size_t nb_threads, int fd,int file_fd, type_hash_t hash, size_t size, struct stat* sb_file){
+
+    size_t file_size = sb_file->st_size;
+
+    void *file_addr = NULL;
+    if (file_size > 0) {
+        file_addr = mmap(NULL, file_size, PROT_READ, MAP_PRIVATE, file_fd, 0);
+        if (file_addr == MAP_FAILED) {
+            perror("mmap fichier à insérer");
+            return 1;
+        }
+    }
+
+    size_t read_block = file_size/nb_threads;
+    pthread_t threads[nb_threads];
+
+    size_t nb_blocks = size / 1024; 
+    if (init_block_mutexes(nb_blocks) != 0) {
+        if (file_addr) munmap(file_addr, file_size);
+        return 1;
+    }
+    
+
+    struct chunk_read *cr = malloc(nb_threads * sizeof(struct chunk_read));
+    if (cr == NULL) {
+        perror("malloc chunk_read");
+        destroy_block_mutexes();
+        munmap(file_addr, file_size);
+        return 1;
+    }
+
+    for(size_t i=0;i<nb_threads;i++){
+
+        cr[i].start = i*read_block;
+        cr[i].end  = (i == nb_threads - 1) ? file_size : (i+1) * read_block;
+        cr[i].fd = fd;
+        cr[i].hash = hash;
+        cr[i].slowns = slowns;
+        cr[i].file_addr = file_addr;
+        cr[i].file_size = file_size;
+        cr[i].table_size = size;
+
+
+        int rc = pthread_create(threads+i,NULL,insertlines_worker,&cr[i]);
+        if(rc!=0){
+            munmap(file_addr,file_size);
+            destroy_block_mutexes();
+            free(cr);
+            fprintf(stderr, "Erreur pthread : %s\n", strerror(rc));
+            return 1;
+        }
+
+    }
+
+    for(size_t i=0;i<nb_threads;i++){
+        int rc = pthread_join(threads[i],NULL);
+        if(rc!=0){
+            fprintf(stderr, "Erreur pthread_join : %s\n", strerror(rc));
+        };
+    }
+
+    munmap(file_addr, file_size);
+    destroy_block_mutexes();
+    free(cr);
+    return 0;
+
 }

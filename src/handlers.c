@@ -423,3 +423,56 @@ int handle_deletehash(int argc, char **argv) {
 
     return 0;
 }
+
+int handle_delete(int argc, char **argv) {
+    if (argc < 3) {
+        fprintf(stderr, "il faut au moins 3 paramètres : <fichier_table> <slowns> <string/nom_fichier>\n");
+        return 1;
+    }
+
+    type_hash_t t_hash = check_extension(argv[0]);
+    if (t_hash == UINT32_MAX) {
+        return 1;
+    }
+
+    long slowns = atol(argv[1]);
+    int fd = open(argv[0], O_RDONLY, 0644);
+    if (fd == -1) {
+        perror_line("open");
+        return 1;
+    }
+
+    struct stat sb = {0};
+    if (fstat(fd, &sb) == -1) {
+        perror("fstat");
+        close(fd);
+        return 1;
+    }
+
+    char entry_type = detect_key_type(slowns, argv[2], fd, t_hash, sb.st_size);
+    int rc = -1;
+    if (entry_type == 'n' || entry_type == 'f') {
+        rc = delete_file(slowns, argv[2], fd, t_hash, sb.st_size);
+    } else if (entry_type == 's') {
+        size_t b = sb.st_size / 1024;
+        uint32_t hashcode = apply_hash((unsigned char *)argv[2], t_hash, b, strlen(argv[2]));
+        if (hashcode == UINT32_MAX) {
+            fprintf(stderr, "Erreur de hachage.\n");
+            close(fd);
+            return 1;
+        }
+        rc = deletehash(slowns, hashcode, fd, sb.st_size);
+    } else {
+        fprintf(stderr, "Tentative de suppression d'une entrée non trouvée ou de type inconnu\n");
+        close(fd);
+        return 1;
+    } 
+
+    close(fd);
+    if (rc == -1) {
+        fprintf(stderr, "Erreur de la commande delete\n");
+        return 1;
+    }
+
+    return 0;
+}

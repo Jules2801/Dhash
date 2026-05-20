@@ -106,4 +106,30 @@ else
     echo -e "${RED}KO: le fichier est toujours là après delete${NC}"
 fi
 
+
+echo -e "\n${GREEN}=== Test 9: Insertions concurrentes en multiprocess ===${NC}"
+TABLE_CONC="test_concurrent.sha"
+rm -f "$TABLE_CONC"
+./hachement make "$TABLE_CONC" 5 1024
+
+for i in {1..20}; do
+    ./hachement insertstring "$TABLE_CONC" 5 "concurrent_$i" >/dev/null &
+done
+wait
+
+success=0
+for i in {1..20}; do
+    ./hachement lookup "$TABLE_CONC" 0 "concurrent_$i" >/dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        success=$((success + 1))
+    fi
+done
+
+if [ "$success" -eq 20 ]; then
+    echo "OK: Les 20 insertions concurrentes ont réussi."
+else
+    echo -e "${RED}KO: Seulement $success/20 insertions ont réussi.${NC}"
+fi
+rm -f "$TABLE_CONC"
+
 echo -e "\n${GREEN}=== Fin des tests (.sha) ===${NC}"

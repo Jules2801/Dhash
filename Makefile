@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra 
+CFLAGS = -Wall -Wextra # -fsanitize=address,leak,undefined
 LDFLAGS = -lcrypto -pthread
 
 SRCS = $(wildcard src/*.c)

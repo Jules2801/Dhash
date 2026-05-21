@@ -65,6 +65,43 @@ int read_object_nolock(struct hache_entree *addr, uint32_t start, size_t b,char 
     return 0;
 }
 
+//met a jours tous les hash dans les objet de type nom ('n')
+void update_name_entry_hfiles(char *buf, uint32_t total,struct hache_entree *old_addr,size_t b_old, size_t b_new,type_hash_t hash){
+    
+    uint32_t name_len;
+    memcpy(&name_len, buf + 1, sizeof(uint32_t));
+
+    
+    size_t header = 1 + sizeof(uint32_t);// 'n' + namelen de 4 octet 
+    size_t h_file_offset = header + name_len;
+
+    //par secu on verifie juste si c'est coeherent 
+    if (h_file_offset > total) return;
+    size_t hfile_zone = total - h_file_offset;
+    if (hfile_zone % sizeof(uint32_t) != 0) return;
+    size_t nb_hfile = hfile_zone / sizeof(uint32_t);
+
+    for (size_t k = 0; k < nb_hfile; k++) {
+        uint32_t old_hfile;
+        memcpy(&old_hfile, buf + h_file_offset + k * sizeof(uint32_t),sizeof(uint32_t));
+        if (old_hfile >= b_old) continue;                  //pas dans la  table
+        uint32_t file_len = old_addr[old_hfile].longueur;
+        if (file_len == 0xffffffffUL) continue;            //bloc libre
+
+        char *file_buf = malloc(file_len > 0 ? file_len : 1);
+        if (file_buf == NULL) continue;
+
+        uint32_t ftotal, fnext;
+        if (read_object_nolock(old_addr, old_hfile, b_old, file_buf, file_len,&ftotal, &fnext) == 0){
+            uint32_t new_hfile = recompute_hash(file_buf, ftotal, file_len,hash, b_new);
+            if (new_hfile != UINT32_MAX) {
+                memcpy(buf + h_file_offset + k * sizeof(uint32_t),&new_hfile, sizeof(uint32_t));
+            }
+        }
+        free(file_buf);
+    }
+}
+
 static void *resize_worker(void *args) {
     struct extend_args *ea = (struct extend_args *)args;
 
@@ -93,6 +130,11 @@ static void *resize_worker(void *args) {
             if (read_object_nolock(old_addr, current, b_old,buf, obj_len, &total, &next) != 0) {
                 free(buf);
                 break;
+            }
+
+            //si c'est un nom il faut aussi recalculer le hash des fichiers 
+            if (total >= 1 && buf[0] == 'n') {
+                update_name_entry_hfiles(buf, total, old_addr, b_old, ea->b_new, ea->hash);
             }
 
             uint32_t new_hash = recompute_hash(buf, total, obj_len, ea->hash, ea->b_new);
@@ -162,7 +204,6 @@ int resize(long slowns, const char *table_path, type_hash_t hash,     size_t siz
         return -1;
     }
 
-
     if (init_block_mutexes(b_new) != 0) {
         munmap(old_addr, size);
         close(old_fd);
@@ -182,7 +223,6 @@ int resize(long slowns, const char *table_path, type_hash_t hash,     size_t siz
         free(tmp_path);
         return -1;
     }
-
     size_t zone = b_old / nb_threads;
 
     for (size_t i = 0; i < nb_threads; i++) {
@@ -210,7 +250,6 @@ int resize(long slowns, const char *table_path, type_hash_t hash,     size_t siz
             return -1;
         }
     }
-
     for (size_t i = 0; i < nb_threads; i++) {
         pthread_join(threads[i], NULL);
     }
@@ -275,3 +314,5 @@ int ajust(long slowns, const char *table_path, type_hash_t hash,size_t size, siz
         return 0;
     }
 }
+
+

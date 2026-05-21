@@ -14,6 +14,7 @@
 #include "../include/command.h"
 #include "../include/file.h"
 #include "../include/insert_cmd.h"
+#include "../include/ajust_table_cmd.h"
 
 #define perror_line(msg) \
     fprintf(stderr, "%s:%d %s: %s\n", __FILE__, __LINE__, msg, strerror(errno))
@@ -577,4 +578,56 @@ int handle_check(int argc, char **argv) {
     close(fd);
 
     return 0;
+}
+
+
+static int handle_resize_cmd(int argc, char **argv, int which) {
+    if (argc != 2) {
+        fprintf(stderr, "il faut 2 paramètres : table slowns\n");
+        return 1;
+    }
+
+    type_hash_t t_hash = check_extension(argv[0]);
+    if (t_hash == (type_hash_t)-1) {
+        return 1;
+    }
+
+    long slowns = atol(argv[1]);
+
+    struct stat sb = {0};
+    if (stat(argv[0], &sb) == -1) {
+        perror("stat");
+        return 1;
+    }
+
+    if (sb.st_size == 0 || sb.st_size % 1024 != 0) {
+        fprintf(stderr, "Taille de table invalide\n");
+        return 1;
+    }
+
+    // Nombre de threads = nombre de coeurs détecté
+    size_t nb_threads = (size_t)sysconf(_SC_NPROCESSORS_ONLN);
+
+    int rc;
+    if (which == 0) {
+        rc = extend(slowns, argv[0], t_hash, sb.st_size, nb_threads);
+    } else if (which == 1) {
+        rc = shrink(slowns, argv[0], t_hash, sb.st_size, nb_threads);
+    } else {
+        rc = ajust(slowns, argv[0], t_hash, sb.st_size, nb_threads);
+    }
+    //parce que je retournais -1 au lieu de 1 
+    return (rc == 0) ? 0 : 1;
+}
+
+int handle_extend(int argc, char **argv) {
+    return handle_resize_cmd(argc, argv, 0);
+}
+
+int handle_shrink(int argc, char **argv) {
+    return handle_resize_cmd(argc, argv, 1);
+}
+
+int handle_ajust(int argc, char **argv) {
+    return handle_resize_cmd(argc, argv, 2);
 }
